@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>riemann.world</title>
 <style>
 :root {
@@ -21,7 +21,10 @@
   --accent: #2a78d6;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--page); color: var(--ink); overflow: hidden; }
+html, body { margin: 0; height: 100%; background: var(--page); color: var(--ink); overflow: hidden; overscroll-behavior: none; }
+/* the page itself never pinch-zooms or double-tap-zooms: only the map does (scroll areas still pan) */
+html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; }
+button, select, input, a { touch-action: manipulation; }
 #app { display: grid; grid-template-columns: minmax(0, 1fr) 440px; grid-template-rows: auto 1fr; height: 100vh; height: 100dvh; }
 #app.nopanel { grid-template-columns: minmax(0, 1fr) 0; }
 header { min-width: 0; }
@@ -98,7 +101,7 @@ aside h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; co
   #searchwrap { position: static; order: 5; flex: 1 1 180px; min-width: 0; }
   #search { width: 100%; font-size: 16px; padding: 7px 10px; }   /* 16px stops iOS zooming on focus */
   #colourwrap { order: 6; }
-  #mode { max-width: 40vw; font-size: 14px; padding: 7px 6px; }
+  #mode { max-width: 40vw; font-size: 16px; padding: 6px 6px; }   /* 16px: no iOS focus zoom */
   #legend { order: 7; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: none; font-size: 11px; gap: 10px; }
   #legend::-webkit-scrollbar { display: none; }
   #legend > span { flex: none; }
@@ -107,11 +110,16 @@ aside h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; co
   #crumbs { left: 8px; top: 8px; font-size: 11px; max-width: calc(100% - 16px); }
   #status { left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 10px; }
   #help { display: none; }
-  aside#sheet { position: fixed; left: 0; right: 0; bottom: 0; height: 42vh; height: 42dvh; border-left: 0; border-top: 1px solid var(--hair);
-    border-radius: 14px 14px 0 0; box-shadow: 0 -8px 28px rgba(0,0,0,.28); z-index: 25; transition: height .22s ease;
-    padding-bottom: env(safe-area-inset-bottom); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-  aside#sheet.full { height: 88vh; height: 88dvh; }
-  #grab { display: flex; justify-content: center; position: sticky; top: 0; background: var(--surface); padding: 8px 0 6px; z-index: 2; cursor: pointer; }
+  html, body { position: fixed; inset: 0; }
+  /* bottom sheet with three snap heights (set from JS via --sheet-h). Below full height the whole
+     sheet is a drag surface; at full height its content scrolls and pulling down from the top shrinks it. */
+  aside#sheet { position: fixed; left: 0; right: 0; bottom: 0; height: var(--sheet-h, 200px); border-left: 0; border-top: 1px solid var(--hair);
+    border-radius: 14px 14px 0 0; box-shadow: 0 -8px 28px rgba(0,0,0,.28); z-index: 25; transition: height .3s cubic-bezier(.2,.9,.25,1);
+    padding-bottom: env(safe-area-inset-bottom); overflow: hidden; touch-action: none; overscroll-behavior: contain; }
+  aside#sheet.dragging { transition: none; }
+  aside#sheet[data-state="full"] { overflow-y: auto; touch-action: pan-x pan-y; }
+  #app:not(.nopanel) #status { display: none; }
+  #grab { display: flex; justify-content: center; position: sticky; top: 0; background: var(--surface); padding: 10px 0 8px; z-index: 2; cursor: grab; touch-action: none; }
   #grab span { width: 40px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .55; }
   aside .sec { padding: 10px 14px; }
   aside .sec:first-child { padding-top: 2px; }
@@ -119,7 +127,13 @@ aside h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; co
   .x { font-size: 24px; padding: 0 2px 0 10px; }
   #src { font-size: 11px; }
   #tip { display: none !important; }
+  #declcard .dname { font-size: 14px; font-weight: 600; margin: 2px 0 2px; word-break: break-all; }
+  #declcard .in { font-size: 12px; color: var(--muted); margin-bottom: 6px; word-break: break-all; }
+  #declcard pre { margin: 0; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; background: var(--page); border-radius: 6px; padding: 8px 10px; }
+  #declcard .more { margin-top: 8px; color: var(--accent); font-size: 13px; cursor: pointer; }
 }
+#declcard { display: none; }
+@media (max-width: 900px) { #declcard:not([hidden]) { display: block; } }
 </style>
 </head>
 <body>
@@ -314,10 +328,11 @@ let W = 0, H = 0, DPR = 1;
 let cam = { x: 0, y: 0, k: 1 };
 function fitK(i, frac = 0.92) { return Math.min(W, H - (typeof insetB === 'function' ? insetB() : 0)) * frac / (2 * R[i]); }
 function resize() {
-  const r = cv.getBoundingClientRect(); DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const r = cv.getBoundingClientRect(); DPR = Math.min(window.devicePixelRatio || 1, 3);   // full sharpness on 3x phone screens
   const first = W === 0;
   W = r.width; H = r.height; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   if (first) cam = { x: X[0], y: Y[0], k: fitK(0) };
+  if (typeof sheetState !== 'undefined' && sheetState !== 'closed' && mobileMQ.matches) setSheet(sheetState);
   requestDraw();
 }
 const sx = x => (x - cam.x) * cam.k + W / 2, sy = y => (y - cam.y) * cam.k + H / 2;
@@ -429,7 +444,7 @@ function draw() {
     // (only folders that directly hold files; pure parent folders keep the light nested look)
     add(fills, TDEP[i], dirFill(i, !DTILES[i].length || (dirReady(i) && rs / Math.sqrt(DFILES[i]) >= 1.5)), px, py, rs);
     if (rs > 4) add(strokes, TDEP[i], dirStroke(i), px, py, rs);
-    if (rs > 38 && i > 0) labels.push([i, px, py, rs]);
+    if (rs > 22 && i > 0) labels.push([i, px, py, rs]);
     drawn++; i++;
   }
   // 2) file tiles: fetch the ones in view whose files would be visible; draw the loaded ones
@@ -452,7 +467,7 @@ function draw() {
       const rs = r * k; if (rs < 0.4) continue;
       const px = sx(x), py = sy(y), hex = fileHex(n);
       add(fills, TDEP[n], rgba(hex, 0.9), px, py, rs); drawn++;
-      if (rs > 20) fileLabels.push([n, px, py, rs, hex]);
+      if (rs > 8) fileLabels.push([n, px, py, rs, hex]);
       if (rs > 70) declFiles.push([n, px, py, rs]);
     }
   }
@@ -465,7 +480,7 @@ function draw() {
     for (const [c, p] of strokes[d]) { ctx.strokeStyle = c; ctx.stroke(p); }
   }
   // 3) declarations inside big files
-  visibleDeclFiles = [];
+  visibleDeclFiles = []; placed = [];
   for (const [n, px, py, rs] of declFiles) {
     const c = srcCache.get(n);
     if (!c) { loadSource(n); continue; }
@@ -481,37 +496,105 @@ function draw() {
       else { ctx.fillStyle = rgba(P.surf, 0.35); ctx.fill(); ctx.strokeStyle = rgba(P.surf, 0.95); ctx.lineWidth = 1.5; ctx.stroke(); }
       if (hoverDecl && hoverDecl.n === n && hoverDecl.j === o.j) { ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke(); }
       if (selDecl && selDecl.n === n && selDecl.j === o.j) { ctx.strokeStyle = P.ink; ctx.lineWidth = 3; ctx.stroke(); }
-      if (dr > 26) {
+      if (dr > 12) {
         const nm = c.decls[o.j].name.split('.').pop();
-        ctx.font = `${Math.min(13, dr / 3)}px system-ui, sans-serif`;
-        ctx.fillStyle = dk === 'axiom' ? P.bg : P.ink;
+        circleLabel(nm, dx, dy, dr, Math.max(9, Math.min(13, dr / 2.6)), 8, dk === 'axiom' ? P.bg : P.ink, P);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        fitText(nm, dx, dy, dr * 1.8);
-        if (dr > 50) { ctx.font = `11px system-ui, sans-serif`; ctx.fillStyle = P.muted; ctx.fillText(c.decls[o.j].kw, dx, dy + Math.min(13, dr / 3) + 2); }
+        if (dr > 60) { ctx.font = `11px system-ui, sans-serif`; ctx.fillStyle = P.muted; ctx.fillText(c.decls[o.j].kw, dx, dy + dr * 0.62); }
       }
     }
   }
   if (selected >= 0) drawSelection(P);
   // 4) labels (collision-avoiding, parents first)
-  ctx.textAlign = 'center'; placed = [];
+  // Labels: folders first (largest first), then files by size; nothing overlaps. Names shrink before they're
+  // cut, and a name that doesn't fit inside its circle may spill over it on a halo.
+  ctx.textAlign = 'center';
   let nl = 0;
+  const LABEL_CAP = 1500;
+  labels.sort((a, b) => b[3] - a[3]);
   for (const [i, px, py, rs] of labels) {
-    if (nl++ > 400) break;
-    const fsz = Math.min(15, Math.max(10, rs / 9));
-    ctx.font = `${rs > 160 ? 600 : 500} ${fsz}px system-ui, sans-serif`; ctx.textBaseline = 'top'; ctx.fillStyle = P.ink2;
-    fitTextHalo(NAME[i], px, py - rs + Math.max(6, rs * 0.03), rs * 1.3, P);
+    if (nl >= LABEL_CAP) break;
+    const L = fitLabel(NAME[i], Math.max(rs * 2.6, 120), Math.max(10.5, Math.min(16, rs / 8)), 8.5, rs > 160 ? 600 : 500);
+    if (L && drawLabel(L, px, py - rs + Math.max(4, rs * 0.035), 'top', P.ink2, P)) nl++;
   }
+  fileLabels.sort((a, b) => b[3] - a[3]);
   for (const [n, px, py, rs, hex] of fileLabels) {
-    if (nl++ > 700) break;
+    if (nl >= LABEL_CAP) break;
     const big = visibleDeclFiles.some(v => v[0] === n);
-    const fsz = Math.min(14, Math.max(10, rs / 5));
-    ctx.font = `${fsz}px system-ui, sans-serif`;
-    if (big) { ctx.textBaseline = 'top'; ctx.fillStyle = P.ink; fitTextHalo(NAME[n], px, py - rs - fsz - 4, Math.max(200, rs * 2), P); }
-    else { ctx.textBaseline = 'middle'; ctx.fillStyle = lum(hex) > 0.35 ? '#0b0b0b' : '#ffffff'; fitText(NAME[n], px, py, rs * 1.8); }
+    const f0 = Math.max(9, Math.min(14, rs / 3));
+    if (big) { const L = fitLabel(NAME[n], Math.max(220, rs * 2), 14, 10, 500); if (L && drawLabel(L, px, py - rs - 18, 'top', P.ink, P)) nl++; continue; }
+    if (circleLabel(NAME[n], px, py, rs, f0, 8.5, lum(hex) > 0.35 ? '#0b0b0b' : '#ffffff', P)) nl++;
   }
   const z = cam.k / fitK(0);
   document.getElementById('status').textContent =
     `${drawn.toLocaleString()} circles · ${tilesLoaded}/${T} tiles${want ? ` (+${want} loading)` : ''} · ${(bytesLoaded / 1e6).toFixed(1)} MB fetched · zoom ×${z.toFixed(z < 10 ? 1 : 0)}`;
+}
+const mwCache = new Map();
+function mw(font, t) {
+  const k = font + '|' + t; let w = mwCache.get(k);
+  if (w === undefined) { ctx.font = font; w = ctx.measureText(t).width; if (mwCache.size > 40000) mwCache.clear(); mwCache.set(k, w); }
+  return w;
+}
+// fit a label into maxw: shrink the font down to minF first, only then shorten with an ellipsis
+function fitLabel(t, maxw, f0, minF, weight) {
+  f0 = Math.round(f0 * 2) / 2;
+  for (let f = f0; f >= minF; f -= 0.5) { const font = `${weight} ${f}px system-ui, sans-serif`, w = mw(font, t); if (w <= maxw) return { s: t, font, w, f }; }
+  const font = `${weight} ${minF}px system-ui, sans-serif`;
+  let lo = 0, hi = t.length;                                   // longest prefix that fits with an ellipsis
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (mw(font, t.slice(0, m) + '…') <= maxw) lo = m; else hi = m - 1; }
+  if (lo < 4) return null;
+  const s = t.slice(0, lo) + '…'; return { s, font, w: mw(font, s), f: minF };
+}
+function tokens(t) {
+  const out = []; let cur = '';
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i], nx = t[i + 1]; cur += ch;
+    if (ch === '_' || ch === '.' || (nx && ch >= 'a' && ch <= 'z' && nx >= 'A' && nx <= 'Z') || (nx && ch >= '0' && ch <= '9' && nx >= 'A' && nx <= 'Z')) { out.push(cur); cur = ''; }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+// wrap a name onto up to maxLines lines of width maxw and total height maxh, shrinking the font if needed
+function wrapLabel(t, maxw, maxh, f0, minF, maxLines, weight) {
+  const tk = tokens(t);
+  if (tk.length < 2) return null;
+  for (let f = Math.round(f0 * 2) / 2; f >= minF; f -= 0.5) {
+    const font = `${weight} ${f}px system-ui, sans-serif`, lines = []; let cur = '';
+    for (const w of tk) { const c = cur + w; if (cur && mw(font, c) > maxw) { lines.push(cur); cur = w; } else cur = c; }
+    if (cur) lines.push(cur);
+    if (lines.length > maxLines || lines.length * f * 1.15 > maxh) continue;
+    let wmax = 0; for (const l of lines) wmax = Math.max(wmax, mw(font, l));
+    if (wmax <= maxw) return { lines, font, f, w: wmax };
+  }
+  return null;
+}
+function drawBlock(L, x, y, fill, P) {           // lines centred on (x, y)
+  const lh = L.f * 1.15, n = L.lines.length, top = y - lh * n / 2;
+  if (!free(x, top, L.w, lh * n)) return false;
+  ctx.font = L.font; ctx.textBaseline = 'middle'; ctx.fillStyle = fill; ctx.textAlign = 'center';
+  if (P) { ctx.lineWidth = 3; ctx.strokeStyle = rgba(P.bg, 0.85); ctx.lineJoin = 'round'; }
+  L.lines.forEach((l, k) => { const yy = top + lh * (k + 0.5); if (P) ctx.strokeText(l, x, yy); ctx.fillText(l, x, yy); });
+  return true;
+}
+// a name inside a circle of radius r: one line if it fits, else wrapped, else spilling over on a halo
+function circleLabel(name, x, y, r, f0, minF, fill, P, weight = 400) {
+  const one = fitLabel(name, r * 1.8, f0, minF, weight);
+  if (one && one.s === name) return drawLabel(one, x, y, 'middle', fill, null);
+  const wr = wrapLabel(name, r * 1.62, r * 1.55, f0, minF, 3, weight);
+  if (wr) return drawBlock(wr, x, y, fill, null);
+  // spilling over: a compact wrapped block first (crowds neighbours least), then one wide line
+  const sw = wrapLabel(name, Math.max(r * 2.3, 80), Math.max(r * 2.6, 60), f0, minF, 3, weight);
+  if (sw && drawBlock(sw, x, y, P.ink, P)) return true;
+  const sp = fitLabel(name, Math.max(r * 3, 120), f0, minF, weight);
+  return sp ? drawLabel(sp, x, y, 'middle', P.ink, P) : false;
+}
+function drawLabel(L, x, y, baseline, fill, P) {
+  const top = baseline === 'top' ? y : y - L.f / 2;
+  if (!free(x, top, L.w, L.f)) return false;
+  ctx.font = L.font; ctx.textBaseline = baseline; ctx.fillStyle = fill;
+  if (P) { ctx.lineWidth = 3; ctx.strokeStyle = rgba(P.bg, 0.85); ctx.lineJoin = 'round'; ctx.strokeText(L.s, x, y); }
+  ctx.fillText(L.s, x, y);
+  return true;
 }
 function fitText(t, x, y, maxw) {
   if (maxw < 14) return;
@@ -667,7 +750,11 @@ function localXY(e) { const r = cv.getBoundingClientRect(); return [e.clientX - 
 function onClick(e) {
   const [px, py] = localXY(e);
   const dh = hitDecl(px, py);
-  if (dh) { select(dh.n, { decl: dh.j }); return; }
+  if (dh) {
+    if (mobileMQ.matches && selected !== dh.n) { select(dh.n, { fly: true }); return; }
+    if (selected === dh.n && srcCache.get(dh.n) && srcCache.get(dh.n).decls) { showDecl(srcCache.get(dh.n), dh.j); return; }
+    select(dh.n, { decl: dh.j }); return;
+  }
   const i = hit(px, py);
   if (i < 0) { flyTo(0); return; }
   select(i, { fly: true });
@@ -727,8 +814,61 @@ document.getElementById('crumbs').addEventListener('click', e => { const n = e.t
 const panel = document.getElementById('panel'), sheet = document.getElementById('sheet'), app = document.getElementById('app');
 const mobileMQ = matchMedia('(max-width: 900px)');
 // on phones the panel is a bottom sheet over the map: leave room for it when framing things
-const insetB = () => (mobileMQ.matches && !app.classList.contains('nopanel')) ? sheet.offsetHeight : 0;
-document.getElementById('grab').onclick = () => sheet.classList.toggle('full');
+const headerEl = document.querySelector('header');
+let sheetState = 'closed';                       // closed | peek | half | full
+function snapPx(st) {
+  const vh = innerHeight, top = headerEl.getBoundingClientRect().bottom;
+  if (st === 'peek') return Math.round(Math.max(170, Math.min(240, vh * 0.27)));
+  if (st === 'half') return Math.round(vh * 0.5);
+  if (st === 'full') return Math.round(vh - top - 8);
+  return 0;
+}
+function setSheet(st) {
+  sheetState = st; sheet.dataset.state = st;
+  sheet.style.setProperty('--sheet-h', snapPx(st) + 'px');
+  if (st !== 'full') sheet.scrollTop = 0;
+}
+const insetB = () => (mobileMQ.matches && !app.classList.contains('nopanel')) ? snapPx(sheetState) : 0;
+// tap the handle: step up through the heights; drag anywhere on the sheet (or the handle) to resize
+document.getElementById('grab').onclick = () => setSheet(sheetState === 'peek' ? 'half' : sheetState === 'half' ? 'full' : 'peek');
+let sd = null;
+sheet.addEventListener('touchstart', e => {
+  if (!mobileMQ.matches || e.touches.length !== 1) { sd = null; return; }
+  const t = e.touches[0], now = performance.now();
+  sd = { y0: t.clientY, h0: sheet.getBoundingClientRect().height, mode: null, onHandle: !!e.target.closest('#grab'), pts: [[t.clientY, now]] };
+}, { passive: true });
+sheet.addEventListener('touchmove', e => {
+  if (!sd) return;
+  const y = e.touches[0].clientY, dy = y - sd.y0;
+  if (!sd.mode) {
+    if (Math.abs(dy) < 6) return;
+    // below full height the sheet moves; at full height content scrolls, except a pull-down from the very top
+    sd.mode = (sd.onHandle || sheetState !== 'full' || (sheet.scrollTop <= 0 && dy > 0)) ? 'drag' : 'scroll';
+    if (sd.mode === 'drag') { sheet.classList.add('dragging'); sd.y0 = y; sd.h0 = sheet.getBoundingClientRect().height; }
+  }
+  if (sd.mode !== 'drag') return;
+  e.preventDefault();
+  sd.pts.push([y, performance.now()]); if (sd.pts.length > 5) sd.pts.shift();
+  const h = Math.max(48, Math.min(snapPx('full'), sd.h0 - (y - sd.y0)));
+  sheet.style.setProperty('--sheet-h', h + 'px');
+}, { passive: false });
+function endSheetDrag() {
+  const d = sd; sd = null;
+  if (!d || d.mode !== 'drag') return;
+  sheet.classList.remove('dragging');
+  const h = sheet.getBoundingClientRect().height;
+  const a = d.pts[0], b = d.pts[d.pts.length - 1];
+  const v = (b[0] - a[0]) / Math.max(16, b[1] - a[1]);          // px/ms, positive = downwards
+  const proj = h - v * 220;                                      // where a flick would carry it
+  if (proj < snapPx('peek') * 0.55) { closePanel(); return; }
+  let best = 'peek';
+  for (const st of ['peek', 'half', 'full']) if (Math.abs(snapPx(st) - proj) < Math.abs(snapPx(best) - proj)) best = st;
+  setSheet(best);
+}
+sheet.addEventListener('touchend', endSheetDrag);
+sheet.addEventListener('touchcancel', endSheetDrag);
+// Safari: block page pinch-zoom (the map handles pinches itself)
+['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
 if (mobileMQ.matches) document.getElementById('search').placeholder = 'Search files, declarations…';
 let selToken = 0;
 async function select(i, opts = {}) {
@@ -737,15 +877,18 @@ async function select(i, opts = {}) {
   if (isFile(i)) await ensureEdges(i);
   if (tok !== selToken) return;
   selected = i; selDecl = null;
-  app.classList.remove('nopanel'); if (!mobileMQ.matches) resize();
+  app.classList.remove('nopanel');
+  if (mobileMQ.matches) { if (sheetState === 'closed') setSheet('peek'); }
+  else resize();
   if (opts.fly) flyTo(i);
   renderPanel(i, opts.decl, opts.declName);
+  sheet.scrollTop = 0;
   updateCrumbs(); requestDraw();
   try { history.replaceState(null, '', '#' + (isFile(i) ? 'm=' + modOf(i) : 'd=' + dirPath(i).join('/'))); } catch (e) {}
   if (isFile(i)) ensureNodes([...FIMP[i].slice(0, LINE_CAP), ...FRIMP[i].slice(0, LINE_CAP)]);
 }
 function closePanel() {
-  selected = -1; selDecl = null; app.classList.add('nopanel'); sheet.classList.remove('full');
+  selected = -1; selDecl = null; app.classList.add('nopanel'); sheetState = 'closed'; sheet.dataset.state = 'closed';
   if (!mobileMQ.matches) resize(); requestDraw();
   try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
 }
@@ -787,6 +930,7 @@ function renderPanel(i, declIdx, declName) {
     });
   } else {
     const k = KINDS[i];
+    h = `<div class="sec" id="declcard" hidden></div>` + h;
     h += `<h3>File</h3><h2>${chip}${esc(modOf(i))}</h2>
       <div class="stats"><div class="stat"><div class="v">${fmt(FLINES[i])}</div><div class="l">lines</div></div>
       <div class="stat"><div class="v">${k[0]}</div><div class="l">theorems</div></div>
@@ -840,7 +984,21 @@ function showDecl(c, j) {
   pre.querySelectorAll('.row.hl').forEach(r => r.classList.remove('hl'));
   for (let k = d.start; k < d.end; k++) { const r = pre.children[k]; if (r) r.classList.add('hl'); }
   const row = pre.children[d.start];
-  if (row) { if (mobileMQ.matches) sheet.classList.add('full'); sheet.scrollTo({ top: row.offsetTop - 80, behavior: 'smooth' }); }
+  const toRow = () => { if (row) sheet.scrollTo({ top: row.offsetTop - 80, behavior: 'smooth' }); };
+  if (!mobileMQ.matches) { toRow(); return; }
+  // phones: a compact card at the top of the sheet instead of jumping into the full source
+  const card = document.getElementById('declcard'); if (!card) return;
+  const shown = c.lines.slice(d.start, Math.min(d.end, d.start + 12));
+  card.innerHTML = `<span class="x" id="declx" title="Close">×</span><h3>Declaration</h3>
+    <div class="dname"><span class="kind">${d.kind}</span>${esc(d.name)}</div>
+    <div class="in">line ${d.start + 1} · ${d.end - d.start} line${d.end - d.start === 1 ? '' : 's'} · in ${esc(NAME[selected])}</div>
+    <pre>${shown.map(hlLine).join('\n')}${d.end - d.start > shown.length ? '\n…' : ''}</pre>
+    <div class="more" id="declmore">Show it in the full source ↓</div>`;
+  card.hidden = false;
+  if (sheetState === 'peek') setSheet('half');
+  sheet.scrollTop = 0;
+  document.getElementById('declx').onclick = () => { card.hidden = true; selDecl = null; requestDraw(); };
+  document.getElementById('declmore').onclick = () => { setSheet('full'); requestAnimationFrame(() => requestAnimationFrame(toRow)); };
 }
 
 // ---------- search (index fetched in shards on first use) ----------
