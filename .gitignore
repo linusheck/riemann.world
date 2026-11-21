@@ -1,0 +1,6 @@
+build/raw.json
+build/raw_*.json
+build/plan.json
+build/decls*.js
+node_modules/
+.DS_Store

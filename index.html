@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>riemann.world</title>
+<style>
+:root {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232322;
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --hair: #2c2c2a; --border: rgba(255,255,255,0.10);
+  --accent: #3987e5;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f0efec;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --hair: #e1e0d9; --border: rgba(11,11,11,0.10);
+  --accent: #2a78d6;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--page); color: var(--ink); overflow: hidden; }
+#app { display: grid; grid-template-columns: 1fr 440px; grid-template-rows: auto 1fr; height: 100vh; }
+#app.nopanel { grid-template-columns: 1fr 0; }
+header { grid-column: 1 / 3; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--hair); background: var(--surface); min-height: 48px; flex-wrap: wrap; }
+header h1 { font-size: 14px; font-weight: 600; margin: 0 6px 0 0; white-space: nowrap; }
+.ctl { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+button.ctl { cursor: pointer; }
+button.ctl:hover { border-color: var(--muted); }
+#searchwrap { position: relative; }
+#search { width: 300px; }
+#results { position: absolute; top: 34px; left: 0; width: 540px; max-height: 60vh; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.35); z-index: 20; display: none; }
+#results div { padding: 6px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--hair); word-break: break-all; }
+#results div:hover, #results div.on { background: var(--surface-2); }
+#results .sub { color: var(--muted); font-size: 11px; cursor: default; }
+#results div .sub { padding: 0; border: 0; }
+#legend { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
+#legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+#legend .bar { width: 160px; height: 10px; border-radius: 5px; display: inline-block; vertical-align: -1px; margin: 0 4px; }
+#stage { position: relative; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+canvas.drag { cursor: grabbing; }
+.pill { background: color-mix(in srgb, var(--surface) 85%, transparent); border: 1px solid var(--border); border-radius: 6px; }
+#crumbs { position: absolute; left: 12px; top: 10px; font-size: 12px; color: var(--ink-2); padding: 4px 8px; max-width: calc(100% - 24px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#crumbs a { color: var(--ink-2); cursor: pointer; text-decoration: none; }
+#crumbs a:hover { color: var(--ink); text-decoration: underline; }
+#status { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: var(--muted); padding: 2px 6px; }
+#help { position: absolute; right: 12px; bottom: 10px; font-size: 11px; color: var(--muted); text-align: right; padding: 4px 8px; }
+#tip { position: fixed; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 12px; max-width: 520px; box-shadow: 0 6px 18px rgba(0,0,0,.35); display: none; z-index: 30; }
+#tip .t { font-weight: 600; word-break: break-all; }
+#tip .m { color: var(--ink-2); margin-top: 2px; }
+#tip pre { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; font-size: 11px; color: var(--ink-2); max-height: 160px; overflow: hidden; }
+aside { border-left: 1px solid var(--hair); background: var(--surface); overflow: auto; font-size: 13px; }
+#app.nopanel aside { display: none; }
+aside .sec { padding: 12px 14px; border-bottom: 1px solid var(--hair); }
+aside h2 { font-size: 14px; margin: 0 0 4px; word-break: break-all; font-weight: 600; }
+aside h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.stat .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .l { font-size: 11px; color: var(--muted); }
+.list div { padding: 3px 0; cursor: pointer; word-break: break-all; font-size: 12px; color: var(--ink-2); }
+.list div:hover { color: var(--ink); }
+.list .n { color: var(--muted); font-variant-numeric: tabular-nums; float: right; margin-left: 8px; }
+.chain div::before { content: "↳ "; color: var(--muted); }
+.kind { display: inline-block; font-size: 10px; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-right: 6px; color: var(--ink-2); min-width: 30px; text-align: center; }
+#src { margin: 0; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; overflow-x: auto; padding: 8px 0; background: var(--page); border-radius: 6px; }
+#src .ln { display: inline-block; width: 46px; text-align: right; padding-right: 10px; color: var(--muted); user-select: none; }
+#src .row.hl { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+#src .kw { color: var(--accent); font-weight: 600; }
+#src .cm { color: var(--muted); font-style: italic; }
+.note { color: var(--muted); font-size: 12px; }
+.chip { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+#loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--page); font-size: 14px; color: var(--ink-2); z-index: 50; }
+.x { float: right; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
+</style>
+</head>
+<body>
+<div id="loading">Loading…</div>
+<div id="app" class="nopanel">
+  <header>
+    <h1>riemann.world</h1>
+    <div id="searchwrap">
+      <input id="search" class="ctl" placeholder="Search files, folders, declarations…  ( / )" autocomplete="off" spellcheck="false">
+      <div id="results"></div>
+    </div>
+    <label style="font-size:12px;color:var(--ink-2)">Colour
+      <select id="mode" class="ctl">
+        <option value="lib">Library</option>
+        <option value="depth">Import distance from Main</option>
+        <option value="indeg">Imported by (count)</option>
+        <option value="thm">Share of theorems</option>
+      </select>
+    </label>
+    <button id="gomain" class="ctl" title="Jump to Main.lean">Main</button>
+    <button id="home" class="ctl" title="Zoom out to everything (Esc)">Overview</button>
+    <button id="theme" class="ctl" title="Toggle light/dark">Light / dark</button>
+    <div id="legend"></div>
+  </header>
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="crumbs" class="pill"></div>
+    <div id="status" class="pill"></div>
+    <div id="help" class="pill">scroll to zoom · drag to pan · click to focus · Esc to go up<br>zoom into a file to see its declarations</div>
+  </div>
+  <aside id="panel"></aside>
+</div>
+<div id="tip"></div>
+<script src="d3-hierarchy.min.js"></script>
+<script src="src/index.js"></script>
+<script>
+'use strict';
+/* Data layout (all fetched on demand):
+   map/skeleton.json  every folder + tile table (~100 KB gzipped, loaded at start)
+   map/tNNNN.json     a tile: up to 1,500 neighbouring files (positions, stats)
+   map/eNNNN.json     that tile's import edges, fetched when one of its files is selected
+   search/sK.txt      search index, loaded when you first search
+   src/bNNN.bin       gzip bundles of Lean source, loaded when a file's source is needed
+   Node ids: folders are 0..D-1 (preorder); files are D..N-1, grouped by tile. */
+const BSTART = window.SRCBUNDLES || [0];
+let S, N, D, F;
+let X, Y, R, PAR, TDEP, LOADED, NAME;           // all nodes
+let DSIZE, DFILES, DLINES, DDECLS, DTHM, DDEPTH, DLIND, DTILES, LIB, MAXTDEP; // folders
+let FID, FLINES, FDEPTH, FINDEG, FEXT, FNIMP, FCHAIN, KINDS, FIMP, FRIMP; // files (indexed by node id)
+let ESTATE; const edgeWaiters = new Map(); // import edges per tile, fetched on selection
+let DIRFILES;                                   // folder -> loaded direct file node ids
+let TSTART, TCOUNT, TB, TMAXR, TSTATE, tilesLoaded = 0, bytesLoaded = 0;
+const tileWaiters = new Map();
+
+async function boot() {
+  const r = await fetch('map/skeleton.json');
+  const txt = await r.text(); bytesLoaded += txt.length;
+  S = JSON.parse(txt);
+  N = S.N; D = S.D; F = S.F;
+  X = new Float64Array(N); Y = new Float64Array(N); R = new Float64Array(N);
+  PAR = new Int32Array(N).fill(-1); TDEP = new Int32Array(N); LOADED = new Uint8Array(N); NAME = new Array(N);
+  const d = S.dir;
+  for (let i = 0; i < D; i++) { X[i] = d.x[i]; Y[i] = d.y[i]; R[i] = d.r[i]; PAR[i] = d.par[i]; NAME[i] = d.name[i]; LOADED[i] = 1; }
+  for (let i = 1; i < D; i++) TDEP[i] = TDEP[PAR[i]] + 1;
+  MAXTDEP = TDEP.reduce((a, b) => Math.max(a, b), 0) + 1;
+  DSIZE = Int32Array.from(d.size); DFILES = d.files; DLINES = d.lines; DDECLS = d.decls; DTHM = d.thm; DDEPTH = d.depth; DLIND = d.lindeg; DTILES = d.tiles;
+  LIB = new Int8Array(N);
+  for (let i = 1; i < D; i++) { if (PAR[i] === 0) { const k = LIBNAMES.indexOf(NAME[i]); LIB[i] = k < 0 ? 7 : k; } else LIB[i] = LIB[PAR[i]]; }
+  FID = new Int32Array(N).fill(-1); FLINES = new Int32Array(N); FDEPTH = new Int32Array(N); FINDEG = new Int32Array(N); FEXT = new Int32Array(N); FNIMP = new Int32Array(N); FCHAIN = new Int32Array(N).fill(-1);
+  KINDS = new Array(N); FIMP = new Array(N); FRIMP = new Array(N);
+  DIRFILES = Array.from({ length: D }, () => []);
+  const T = S.tiles.length;
+  TSTART = new Int32Array(T); TCOUNT = new Int32Array(T); TB = new Float64Array(T * 4); TMAXR = new Float64Array(T); TSTATE = new Uint8Array(T); ESTATE = new Uint8Array(T);
+  S.tiles.forEach((t, k) => { TSTART[k] = t[0]; TCOUNT[k] = t[1]; TB[k * 4] = t[2]; TB[k * 4 + 1] = t[3]; TB[k * 4 + 2] = t[4]; TB[k * 4 + 3] = t[5]; TMAXR[k] = t[6]; });
+  start();
+}
+function tileOf(n) { let lo = 0, hi = TSTART.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (TSTART[m] <= n) lo = m; else hi = m - 1; } return lo; }
+function loadTile(k) {
+  if (TSTATE[k] === 2) return Promise.resolve();
+  if (tileWaiters.has(k)) return tileWaiters.get(k);
+  TSTATE[k] = 1;
+  const p = fetch(`map/t${String(k).padStart(4, '0')}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }).then(txt => {
+    bytesLoaded += txt.length;
+    const t = JSON.parse(txt), s = TSTART[k];
+    for (let j = 0; j < t.x.length; j++) {
+      const n = s + j;
+      X[n] = t.x[j]; Y[n] = t.y[j]; R[n] = t.r[j]; PAR[n] = t.par[j]; NAME[n] = t.name[j]; TDEP[n] = TDEP[PAR[n]] + 1;
+      FID[n] = t.fid[j]; FLINES[n] = t.lines[j]; FDEPTH[n] = t.depth[j]; FINDEG[n] = t.indeg[j]; FEXT[n] = t.ext[j]; FNIMP[n] = t.nimp[j];
+      KINDS[n] = t.kinds.slice(j * 5, j * 5 + 5);
+      LOADED[n] = 1; DIRFILES[PAR[n]].push(n);
+    }
+    TSTATE[k] = 2; tilesLoaded++; tileWaiters.delete(k); requestDraw();
+  }).catch(e => { TSTATE[k] = 0; tileWaiters.delete(k); console.warn('tile', k, e); });
+  tileWaiters.set(k, p);
+  return p;
+}
+function loadEdges(k) {
+  if (ESTATE[k] === 2) return Promise.resolve();
+  if (edgeWaiters.has(k)) return edgeWaiters.get(k);
+  const p = fetch(`map/e${String(k).padStart(4, '0')}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }).then(txt => {
+    bytesLoaded += txt.length;
+    const e = JSON.parse(txt), s = TSTART[k];
+    for (let j = 0; j < e.imp.length; j++) { FIMP[s + j] = e.imp[j]; FRIMP[s + j] = e.rimp[j]; FCHAIN[s + j] = e.chain[j]; }
+    ESTATE[k] = 2; edgeWaiters.delete(k); requestDraw();
+  }).catch(e => { edgeWaiters.delete(k); console.warn('edges', k, e); });
+  edgeWaiters.set(k, p);
+  return p;
+}
+const ensureEdges = n => n < D ? Promise.resolve() : loadEdges(tileOf(n));
+const ensureNode = n => (n < D || LOADED[n]) ? Promise.resolve() : loadTile(tileOf(n));
+const ensureNodes = ns => Promise.all([...new Set(ns.filter(n => n >= D && !LOADED[n]).map(tileOf))].map(loadTile));
+const ensureDirFiles = i => Promise.all(DTILES[i].map(loadTile));
+const dirReady = i => DTILES[i].every(k => TSTATE[k] === 2);
+const isFile = n => n >= D;
+function dirPath(i) { const p = []; while (i > 0) { p.push(NAME[i]); i = PAR[i]; } return p.reverse(); }
+function modOf(n) { return [...dirPath(PAR[n]), NAME[n]].join('.'); }
+function nodePath(n) { return isFile(n) ? modOf(n) : dirPath(n).join('/'); }
+function dirChildren(i) { const out = []; for (let c = i + 1; c < i + DSIZE[i]; c += DSIZE[c]) out.push(c); return out; }
+
+// ---------- palette ----------
+const LIBNAMES = ['Development', 'Formalism', 'GroundTheory', 'ReciprocityTheory', 'CompanionTheory', 'PositivityTheory', 'Lemmata'];
+const LIBLABELS = [...LIBNAMES, 'Top level'];
+// viridis (perceptually uniform, colour-blind safe); each theme drops the end that vanishes into its background
+const VIRIDIS = ['#440154', '#482475', '#414487', '#355f8d', '#2a788e', '#21918c', '#22a884', '#44bf70', '#7ad151', '#bddf26', '#fde725'];
+const PAL = {
+  dark: { cat: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0ca30c', '#9085e9', '#e66767'],
+          seq: ['#104281', '#184f95', '#1c5cab', '#256abf', '#2a78d6', '#3987e5', '#5598e7', '#6da7ec', '#86b6ef', '#9ec5f4', '#b7d3f6', '#cde2fb'],
+          multi: VIRIDIS.slice(1),
+          ink: '#f0efec', ink2: '#c3c2b7', muted: '#898781', bg: '#0d0d0d', surf: '#1a1a19', dirN: 'rgba(240,239,236,0.045)', ringN: 'rgba(240,239,236,0.16)' },
+  light: { cat: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
+          seq: ['#104281', '#184f95', '#1c5cab', '#256abf', '#2a78d6', '#3987e5', '#5598e7', '#6da7ec', '#86b6ef', '#9ec5f4', '#b7d3f6', '#cde2fb'].reverse(),
+          multi: VIRIDIS.slice(0, 10),
+          ink: '#0b0b0b', ink2: '#52514e', muted: '#898781', bg: '#f9f9f7', surf: '#fcfcfb', dirN: 'rgba(11,11,11,0.035)', ringN: 'rgba(11,11,11,0.16)' },
+};
+let theme = (() => { try { return localStorage.getItem('riemann-world-theme'); } catch (e) { return null; } })()
+  || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+let mode = 'lib';
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+function lum(hex) { const n = parseInt(hex.slice(1), 16); const c = [n >> 16, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+// depth -> colour position by rank (histogram-equalised), so the busy 7-20 range spreads over the whole ramp
+function depthT(dv) { const T = S.depthT; const a = Math.max(0, Math.min(T.length - 1, Math.floor(dv))), b = Math.min(T.length - 1, a + 1), f = dv - a; return T[a] + (T[b] - T[a]) * f; }
+function ramp() { const P = PAL[theme]; return mode === 'depth' ? P.multi : P.seq; }
+function rampHex(t) { const r = ramp(); return r[Math.max(0, Math.min(r.length - 1, Math.round(t * (r.length - 1))))]; }
+// value in [0,1] for a node under the current mode
+function nodeT(n) {
+  if (mode === 'depth') return isFile(n) ? depthT(FDEPTH[n]) : depthT(DDEPTH[n]);
+  if (mode === 'indeg') return (isFile(n) ? Math.log1p(FINDEG[n]) : DLIND[n]) / Math.log1p(S.maxIndeg);
+  if (mode === 'thm') { if (isFile(n)) { const k = KINDS[n], s = k[0] + k[1] + k[2] + k[3] + k[4]; return s ? k[0] / s : 0; } return DDECLS[n] ? DTHM[n] / DDECLS[n] : 0; }
+  return 0;
+}
+const libOf = n => isFile(n) ? LIB[PAR[n]] : LIB[n];
+function fileHex(n) { return mode === 'lib' ? PAL[theme].cat[libOf(n)] : rampHex(nodeT(n)); }
+// colour cache (strings) so canvas batching works
+const colCache = new Map();
+const rgba = (hex, a) => { const k = hex + a; let v = colCache.get(k); if (!v) colCache.set(k, v = hexA(hex, a)); return v; };
+function dirFill(i, ready) {
+  const P = PAL[theme];
+  if (i === 0) return P.dirN;
+  const hex = mode === 'lib' ? P.cat[LIB[i]] : rampHex(nodeT(i));
+  if (!ready) return rgba(hex, theme === 'dark' ? 0.62 : 0.6);            // summary disc: about as dense as its files look when drawn
+  if (mode === 'lib') return rgba(hex, theme === 'dark' ? 0.07 : 0.06);
+  if (mode === 'thm') return rgba(hex, 0.10);
+  return P.dirN;
+}
+function dirStroke(i) { const P = PAL[theme]; return (mode === 'lib' && i > 0) ? rgba(P.cat[LIB[i]], theme === 'dark' ? 0.35 : 0.4) : P.ringN; }
+function dirDot(i) { return rgba(mode === 'lib' ? PAL[theme].cat[LIB[i] || 0] : rampHex(nodeT(i)), 0.9); }
+function recolor() {
+  document.documentElement.dataset.theme = theme;
+  drawLegend(); requestDraw();
+}
+function drawLegend() {
+  const P = PAL[theme], L = document.getElementById('legend');
+  if (mode === 'lib') {
+    L.innerHTML = LIBLABELS.map((n, k) => `<span><span class="sw" style="background:${P.cat[k]}"></span>${n}</span>`).join('');
+  } else if (mode === 'depth') {
+    // tick labels at the depths that sit at 0, 1/2 and 1 of the ramp
+    const at = q => { const T = S.depthT; let d = 0; while (d < T.length - 1 && T[d] < q) d++; return d; };
+    L.innerHTML = `<span>${at(0.02)} steps</span><span class="bar" style="background:linear-gradient(90deg, ${P.multi.join(',')})"></span><span>${at(0.98)}+ steps</span><span class="note">· median ${at(0.5)} · colours spread by rank</span>`;
+  } else {
+    const g = `linear-gradient(90deg, ${P.seq.join(',')})`;
+    const [a, b] = mode === 'indeg' ? ['0', `${S.maxIndeg.toLocaleString()} importers (log)`] : ['0% theorems', '100%'];
+    L.innerHTML = `<span>${a}</span><span class="bar" style="background:${g}"></span><span>${b}</span>`;
+  }
+}
+
+// ---------- camera ----------
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+let cam = { x: 0, y: 0, k: 1 };
+function fitK(i, frac = 0.92) { return Math.min(W, H) * frac / (2 * R[i]); }
+function resize() {
+  const r = cv.getBoundingClientRect(); DPR = window.devicePixelRatio || 1;
+  const first = W === 0;
+  W = r.width; H = r.height; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  if (first) cam = { x: X[0], y: Y[0], k: fitK(0) };
+  requestDraw();
+}
+const sx = x => (x - cam.x) * cam.k + W / 2, sy = y => (y - cam.y) * cam.k + H / 2;
+const wx = px => (px - W / 2) / cam.k + cam.x, wy = py => (py - H / 2) / cam.k + cam.y;
+
+// ---------- source + declarations (on demand) ----------
+const DECL_RE = /^(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|nonrec|partial|unsafe|scoped|local)\s+)*(theorem|lemma|def|abbrev|instance|structure|class|inductive|axiom|opaque|example)\b(?:\s+([^\s:({\[]+))?/;
+const KINDMAP = { theorem: 'thm', lemma: 'thm', def: 'def', abbrev: 'def', instance: 'inst', structure: 'struct', class: 'struct', inductive: 'struct', axiom: 'axiom', opaque: 'axiom', example: 'ex' };
+const srcCache = new Map(); // node -> {lines, decls, packed} | 'pending' | {error}
+const waiters = new Map();
+let inflight = 0; const fetchQueue = [];
+function parseDecls(lines) {
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (!ln || ln[0] === ' ' || ln[0] === '\t' || ln[0] === '-' || ln[0] === '/') continue;
+    const m = DECL_RE.exec(ln);
+    if (m) out.push({ kind: KINDMAP[m[1]], kw: m[1], name: m[2] || '(anonymous)', start: i, end: lines.length });
+  }
+  for (let j = 0; j < out.length; j++) {
+    let e = j + 1 < out.length ? out[j + 1].start : lines.length;
+    while (e > out[j].start + 1 && !lines[e - 1].trim()) e--;
+    out[j].end = e;
+    let sig = '';
+    for (let k = out[j].start; k < Math.min(e, out[j].start + 8); k++) {
+      const l = lines[k]; const cut = l.search(/:=|\bwhere\b/);
+      sig += (cut >= 0 ? l.slice(0, cut) : l) + '\n';
+      if (cut >= 0) break;
+    }
+    out[j].sig = sig.trim().slice(0, 700);
+  }
+  return out;
+}
+function bundleOf(f) { let lo = 0, hi = BSTART.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (BSTART[m] <= f) lo = m; else hi = m - 1; } return lo; }
+const bundleCache = new Map();
+function getBundle(k) {
+  let p = bundleCache.get(k);
+  if (p) { bundleCache.delete(k); bundleCache.set(k, p); return p; }
+  p = fetch(`src/b${String(k).padStart(3, '0')}.bin`)
+    .then(r => { if (!r.ok) throw new Error(r.status + ' ' + r.statusText); return r.arrayBuffer(); })
+    .then(buf => {
+      bytesLoaded += buf.byteLength;
+      const b = new Uint8Array(buf);
+      if (b[0] === 0x1f && b[1] === 0x8b) return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+      return new TextDecoder().decode(b);
+    })
+    .then(t => new Map(JSON.parse(t)));
+  p.catch(() => bundleCache.delete(k));
+  bundleCache.set(k, p);
+  while (bundleCache.size > 12) bundleCache.delete(bundleCache.keys().next().value);
+  return p;
+}
+function loadSource(n, cb) {
+  const c = srcCache.get(n);
+  if (c && c !== 'pending') { cb && cb(c); return; }
+  if (cb) (waiters.get(n) || waiters.set(n, []).get(n)).push(cb);
+  if (c === 'pending') return;
+  srcCache.set(n, 'pending'); fetchQueue.push(n); pump();
+}
+function pump() {
+  while (inflight < 6 && fetchQueue.length) {
+    const n = fetchQueue.pop(); inflight++;
+    ensureNode(n).then(() => getBundle(bundleOf(FID[n])))
+      .then(m => { const text = m.get(FID[n]); if (text === undefined) throw new Error('not in bundle'); const lines = text.split('\n'); srcCache.set(n, { lines, decls: parseDecls(lines), packed: null }); })
+      .catch(e => srcCache.set(n, { error: String(e.message || e) }))
+      .finally(() => { inflight--; const c = srcCache.get(n); (waiters.get(n) || []).forEach(cb => cb(c)); waiters.delete(n); requestDraw(); pump(); });
+  }
+}
+function packDecls(c) {
+  if (c.packed || !c.decls || !c.decls.length) return c.packed;
+  const circ = c.decls.map((d, j) => ({ r: Math.sqrt(Math.max(1, d.end - d.start)), j }));
+  circ.sort((a, b) => b.r - a.r);
+  const pad = 0.6;
+  circ.forEach(o => o.r += pad);
+  d3.packSiblings(circ);
+  const enc = d3.packEnclose(circ);
+  circ.forEach(o => { o.r -= pad; o.x -= enc.x; o.y -= enc.y; });
+  c.packed = { circ, R: enc.r };
+  return c.packed;
+}
+
+// ---------- rendering ----------
+let drawPending = false;
+function requestDraw() { if (!drawPending) { drawPending = true; requestAnimationFrame(draw); } }
+let tileTimer = 0;
+let selected = -1, hoverDecl = null, selDecl = null, visibleDeclFiles = [], placed = [];
+const TAU = 6.283185307;
+function draw() {
+  drawPending = false;
+  const P = PAL[theme], k = cam.k;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = P.bg; ctx.fillRect(0, 0, W, H);
+  const fills = Array.from({ length: MAXTDEP + 1 }, () => new Map());
+  const strokes = Array.from({ length: MAXTDEP + 1 }, () => new Map());
+  const add = (buckets, d, style, px, py, rs) => { const m = buckets[d]; let p = m.get(style); if (!p) m.set(style, p = new Path2D()); p.moveTo(px + rs, py); p.arc(px, py, rs, 0, TAU); };
+  const labels = [], fileLabels = [], declFiles = [];
+  const x0 = wx(0), x1 = wx(W), y0 = wy(0), y1 = wy(H);
+  let drawn = 0;
+  // 1) folders (always present)
+  for (let i = 0; i < D;) {
+    const r = R[i], x = X[i], y = Y[i];
+    if (x + r < x0 || x - r > x1 || y + r < y0 || y - r > y1) { i += DSIZE[i]; continue; }
+    const rs = r * k;
+    if (rs < 0.35) { i += DSIZE[i]; continue; }
+    const px = sx(x), py = sy(y);
+    if (rs < 2.5 && i > 0) { add(fills, TDEP[i], dirDot(i), px, py, rs); drawn++; i += DSIZE[i]; continue; }
+    // solid "summary" disc while its files are missing OR too small to see at this zoom, so a folder
+    // looks the same whether or not you've been there before
+    // (only folders that directly hold files; pure parent folders keep the light nested look)
+    add(fills, TDEP[i], dirFill(i, !DTILES[i].length || (dirReady(i) && rs / Math.sqrt(DFILES[i]) >= 1.5)), px, py, rs);
+    if (rs > 4) add(strokes, TDEP[i], dirStroke(i), px, py, rs);
+    if (rs > 38 && i > 0) labels.push([i, px, py, rs]);
+    drawn++; i++;
+  }
+  // 2) file tiles: fetch the ones in view whose files would be visible; draw the loaded ones
+  const T = TSTART.length;
+  let want = 0; const wantTiles = [];
+  for (let t = 0; t < T; t++) {
+    if (TB[t * 4 + 2] < x0 || TB[t * 4] > x1 || TB[t * 4 + 3] < y0 || TB[t * 4 + 1] > y1) continue;
+    // load a tile once its area is reasonably big on screen (or it holds a large file); until then
+    // the folder placeholders stand in for it, like low-res map tiles
+    // (this threshold only decides fetching: tiles already loaded are always drawn)
+    if (TSTATE[t] !== 2) {
+      const tw = Math.max(TB[t * 4 + 2] - TB[t * 4], TB[t * 4 + 3] - TB[t * 4 + 1]) * k;
+      if (tw < 110 && TMAXR[t] * k < 7) continue;
+      want++; if (TSTATE[t] === 0) wantTiles.push(t); continue;
+    }
+    const s = TSTART[t], e = s + TCOUNT[t];
+    for (let n = s; n < e; n++) {
+      const r = R[n], x = X[n], y = Y[n];
+      if (x + r < x0 || x - r > x1 || y + r < y0 || y - r > y1) continue;
+      const rs = r * k; if (rs < 0.4) continue;
+      const px = sx(x), py = sy(y), hex = fileHex(n);
+      add(fills, TDEP[n], rgba(hex, 0.9), px, py, rs); drawn++;
+      if (rs > 20) fileLabels.push([n, px, py, rs, hex]);
+      if (rs > 70) declFiles.push([n, px, py, rs]);
+    }
+  }
+  // fetch only once the view has settled, so zoom animations don't pull every level they pass through
+  clearTimeout(tileTimer);
+  if (wantTiles.length) tileTimer = setTimeout(() => wantTiles.slice(0, 24).forEach(loadTile), anim ? 400 : 160);
+  for (let d = 0; d <= MAXTDEP; d++) {
+    for (const [c, p] of fills[d]) { ctx.fillStyle = c; ctx.fill(p); }
+    ctx.lineWidth = 1;
+    for (const [c, p] of strokes[d]) { ctx.strokeStyle = c; ctx.stroke(p); }
+  }
+  // 3) declarations inside big files
+  visibleDeclFiles = [];
+  for (const [n, px, py, rs] of declFiles) {
+    const c = srcCache.get(n);
+    if (!c) { loadSource(n); continue; }
+    if (c === 'pending' || c.error || !c.decls.length) continue;
+    const pk = packDecls(c); const s = rs * 0.9 / pk.R;
+    visibleDeclFiles.push([n, px, py, s]);
+    for (const o of pk.circ) {
+      const dr = o.r * s; if (dr < 0.6) continue;
+      const dx = px + o.x * s, dy = py + o.y * s, dk = c.decls[o.j].kind;
+      ctx.beginPath(); ctx.arc(dx, dy, dr, 0, TAU);
+      if (dk === 'thm') { ctx.fillStyle = rgba(P.surf, 0.88); ctx.fill(); }
+      else if (dk === 'axiom') { ctx.fillStyle = rgba(P.ink, 0.95); ctx.fill(); }
+      else { ctx.fillStyle = rgba(P.surf, 0.35); ctx.fill(); ctx.strokeStyle = rgba(P.surf, 0.95); ctx.lineWidth = 1.5; ctx.stroke(); }
+      if (hoverDecl && hoverDecl.n === n && hoverDecl.j === o.j) { ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke(); }
+      if (selDecl && selDecl.n === n && selDecl.j === o.j) { ctx.strokeStyle = P.ink; ctx.lineWidth = 3; ctx.stroke(); }
+      if (dr > 26) {
+        const nm = c.decls[o.j].name.split('.').pop();
+        ctx.font = `${Math.min(13, dr / 3)}px system-ui, sans-serif`;
+        ctx.fillStyle = dk === 'axiom' ? P.bg : P.ink;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        fitText(nm, dx, dy, dr * 1.8);
+        if (dr > 50) { ctx.font = `11px system-ui, sans-serif`; ctx.fillStyle = P.muted; ctx.fillText(c.decls[o.j].kw, dx, dy + Math.min(13, dr / 3) + 2); }
+      }
+    }
+  }
+  if (selected >= 0) drawSelection(P);
+  // 4) labels (collision-avoiding, parents first)
+  ctx.textAlign = 'center'; placed = [];
+  let nl = 0;
+  for (const [i, px, py, rs] of labels) {
+    if (nl++ > 400) break;
+    const fsz = Math.min(15, Math.max(10, rs / 9));
+    ctx.font = `${rs > 160 ? 600 : 500} ${fsz}px system-ui, sans-serif`; ctx.textBaseline = 'top'; ctx.fillStyle = P.ink2;
+    fitTextHalo(NAME[i], px, py - rs + Math.max(6, rs * 0.03), rs * 1.3, P);
+  }
+  for (const [n, px, py, rs, hex] of fileLabels) {
+    if (nl++ > 700) break;
+    const big = visibleDeclFiles.some(v => v[0] === n);
+    const fsz = Math.min(14, Math.max(10, rs / 5));
+    ctx.font = `${fsz}px system-ui, sans-serif`;
+    if (big) { ctx.textBaseline = 'top'; ctx.fillStyle = P.ink; fitTextHalo(NAME[n], px, py - rs - fsz - 4, Math.max(200, rs * 2), P); }
+    else { ctx.textBaseline = 'middle'; ctx.fillStyle = lum(hex) > 0.35 ? '#0b0b0b' : '#ffffff'; fitText(NAME[n], px, py, rs * 1.8); }
+  }
+  const z = cam.k / fitK(0);
+  document.getElementById('status').textContent =
+    `${drawn.toLocaleString()} circles · ${tilesLoaded}/${T} tiles${want ? ` (+${want} loading)` : ''} · ${(bytesLoaded / 1e6).toFixed(1)} MB fetched · zoom ×${z.toFixed(z < 10 ? 1 : 0)}`;
+}
+function fitText(t, x, y, maxw) {
+  if (maxw < 14) return;
+  let s = t; if (ctx.measureText(s).width > maxw) {
+    while (s.length > 2 && ctx.measureText(s + '…').width > maxw) s = s.slice(0, -1);
+    if (s.length <= 2) return; s += '…';
+  }
+  ctx.fillText(s, x, y);
+}
+function free(x, y, w, h) {
+  const r = [x - w / 2 - 2, y - 1, x + w / 2 + 2, y + h + 1];
+  for (const q of placed) if (r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1]) return false;
+  placed.push(r); return true;
+}
+function fitTextHalo(t, x, y, maxw, P) {
+  ctx.save(); ctx.lineWidth = 3; ctx.strokeStyle = rgba(P.bg, 0.8); ctx.lineJoin = 'round';
+  let s = t; if (ctx.measureText(s).width > maxw) {
+    while (s.length > 2 && ctx.measureText(s + '…').width > maxw) s = s.slice(0, -1);
+    if (s.length <= 2) { ctx.restore(); return; } s += '…';
+  }
+  const fh = parseFloat(ctx.font.match(/(\d+(?:\.\d+)?)px/)[1]);
+  if (!free(x, y, ctx.measureText(s).width, fh)) { ctx.restore(); return; }
+  ctx.strokeText(s, x, y); ctx.fillText(s, x, y); ctx.restore();
+}
+const LINE_CAP = 60;
+function drawSelection(P) {
+  const i = selected;
+  const ring = (j, w, dash) => {
+    const rs = Math.max(R[j] * cam.k, 3);
+    ctx.beginPath(); ctx.setLineDash(dash || []); ctx.lineWidth = w; ctx.arc(sx(X[j]), sy(Y[j]), rs + w / 2, 0, TAU); ctx.stroke();
+  };
+  ctx.save(); ctx.strokeStyle = P.ink;
+  if (isFile(i) && LOADED[i] && FIMP[i]) {
+    const cx = sx(X[i]), cy = sy(Y[i]);
+    const imps = FIMP[i].slice(0, LINE_CAP).filter(j => LOADED[j]), rimps = FRIMP[i].slice(0, LINE_CAP).filter(j => LOADED[j]);
+    ctx.globalAlpha = 0.55; ctx.lineWidth = 1;
+    ctx.beginPath(); for (const j of imps) { ctx.moveTo(cx, cy); ctx.lineTo(sx(X[j]), sy(Y[j])); } ctx.stroke();
+    ctx.setLineDash([4, 4]); ctx.beginPath(); for (const j of rimps) { ctx.moveTo(cx, cy); ctx.lineTo(sx(X[j]), sy(Y[j])); } ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 0.9;
+    for (const j of imps) ring(j, 1.5);
+    for (const j of rimps) ring(j, 1.5, [3, 3]);
+  }
+  ctx.globalAlpha = 1; ring(i, 2.5);
+  ctx.restore();
+}
+
+// ---------- hit testing ----------
+function hit(px, py) {
+  const x = wx(px), y = wy(py);
+  const inside = j => { const dx = x - X[j], dy = y - Y[j]; return dx * dx + dy * dy <= R[j] * R[j]; };
+  if (!inside(0)) return -1;
+  let i = 0;
+  outer: while (true) {
+    if (R[i] * cam.k < 2.5) return i;
+    for (const f of DIRFILES[i]) if (inside(f)) return f;
+    for (let c = i + 1; c < i + DSIZE[i]; c += DSIZE[c]) if (inside(c)) { i = c; continue outer; }
+    return i;
+  }
+}
+function hitDecl(px, py) {
+  for (const [n, cx, cy, s] of visibleDeclFiles) {
+    const c = srcCache.get(n); if (!c || !c.packed) continue;
+    for (const o of c.packed.circ) {
+      const dx = px - (cx + o.x * s), dy = py - (cy + o.y * s), r = o.r * s;
+      if (dx * dx + dy * dy <= r * r) return { n, j: o.j };
+    }
+  }
+  return null;
+}
+
+// ---------- smooth zoom (van Wijk & Nuij) ----------
+function interpolateZoom(p0, p1) {
+  const rho = Math.SQRT2, rho2 = 2, rho4 = 4;
+  const [ux0, uy0, w0] = p0, [ux1, uy1, w1] = p1, dx = ux1 - ux0, dy = uy1 - uy0, d2 = dx * dx + dy * dy;
+  let fn, S2;
+  if (d2 < 1e-12) { S2 = Math.log(w1 / w0) / rho; fn = t => [ux0 + t * dx, uy0 + t * dy, w0 * Math.exp(rho * t * S2)]; }
+  else {
+    const d1 = Math.sqrt(d2), b0 = (w1 * w1 - w0 * w0 + rho4 * d2) / (2 * w0 * rho2 * d1), b1 = (w1 * w1 - w0 * w0 - rho4 * d2) / (2 * w1 * rho2 * d1);
+    const r0 = Math.log(Math.sqrt(b0 * b0 + 1) - b0), r1 = Math.log(Math.sqrt(b1 * b1 + 1) - b1);
+    S2 = (r1 - r0) / rho;
+    fn = t => { const s = t * S2, c0 = Math.cosh(r0), u = w0 / (rho2 * d1) * (c0 * Math.tanh(rho * s + r0) - Math.sinh(r0)); return [ux0 + u * dx, uy0 + u * dy, w0 * c0 / Math.cosh(rho * s + r0)]; };
+  }
+  fn.duration = Math.abs(S2) * 1000; return fn;
+}
+let anim = null;
+function flyTo(i, frac) {
+  const v = Math.min(W, H);
+  const z = interpolateZoom([cam.x, cam.y, v / cam.k], [X[i], Y[i], v / fitK(i, frac || (isFile(i) ? 0.62 : 0.92))]);
+  const dur = Math.max(350, Math.min(1800, z.duration * 0.9)), t0 = performance.now();
+  if (anim) cancelAnimationFrame(anim);
+  const step = now => {
+    let t = Math.min(1, (now - t0) / dur); t = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const [x, y, w] = z(t); cam = { x, y, k: v / w }; draw(); updateCrumbs();
+    anim = t < 1 ? requestAnimationFrame(step) : null;
+  };
+  anim = requestAnimationFrame(step);
+}
+
+// ---------- interaction ----------
+let drag = null, moved = false;
+cv.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y }; moved = false; cv.classList.add('drag'); if (anim) { cancelAnimationFrame(anim); anim = null; } });
+window.addEventListener('mouseup', e => { cv.classList.remove('drag'); if (drag && !moved && e.target === cv) onClick(e); drag = null; });
+window.addEventListener('mousemove', e => {
+  if (drag) {
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    if (moved) { cam.x = drag.cx - dx / cam.k; cam.y = drag.cy - dy / cam.k; requestDraw(); updateCrumbs(); hideTip(); }
+    return;
+  }
+  if (e.target === cv) onHover(e); else hideTip();
+});
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (anim) { cancelAnimationFrame(anim); anim = null; }
+  const [px, py] = localXY(e), ax = wx(px), ay = wy(py);
+  const dz = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  cam.k = Math.max(fitK(0) * 0.5, Math.min(fitK(0) * 2e5, cam.k * Math.exp(-dz * (e.ctrlKey ? 0.01 : 0.0018))));
+  cam.x = ax - (px - W / 2) / cam.k; cam.y = ay - (py - H / 2) / cam.k;
+  requestDraw(); updateCrumbs(); onHover(e);
+}, { passive: false });
+// touch: one finger pans, two fingers pinch-zoom
+let touches = null;
+cv.addEventListener('touchstart', e => { touches = [...e.touches].map(t => ({ x: t.clientX, y: t.clientY })); touches.cam = { ...cam }; moved = false; }, { passive: true });
+cv.addEventListener('touchmove', e => {
+  e.preventDefault(); if (!touches) return;
+  const t = [...e.touches].map(t => ({ x: t.clientX, y: t.clientY })), c0 = touches.cam, r = cv.getBoundingClientRect();
+  if (t.length === 1 && touches.length === 1) { const dx = t[0].x - touches[0].x, dy = t[0].y - touches[0].y; if (Math.abs(dx) + Math.abs(dy) > 4) moved = true; cam.x = c0.x - dx / c0.k; cam.y = c0.y - dy / c0.k; }
+  else if (t.length === 2 && touches.length === 2) {
+    moved = true;
+    const d0 = Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y), d1 = Math.hypot(t[0].x - t[1].x, t[0].y - t[1].y);
+    const m0 = [(touches[0].x + touches[1].x) / 2 - r.left, (touches[0].y + touches[1].y) / 2 - r.top], m1 = [(t[0].x + t[1].x) / 2 - r.left, (t[0].y + t[1].y) / 2 - r.top];
+    const ax = (m0[0] - W / 2) / c0.k + c0.x, ay = (m0[1] - H / 2) / c0.k + c0.y;
+    cam.k = c0.k * d1 / d0; cam.x = ax - (m1[0] - W / 2) / cam.k; cam.y = ay - (m1[1] - H / 2) / cam.k;
+  }
+  requestDraw(); updateCrumbs();
+}, { passive: false });
+cv.addEventListener('touchend', e => { if (touches && !moved && e.changedTouches.length === 1) onClick(e.changedTouches[0]); touches = null; });
+function localXY(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+function onClick(e) {
+  const [px, py] = localXY(e);
+  const dh = hitDecl(px, py);
+  if (dh) { select(dh.n, { decl: dh.j }); return; }
+  const i = hit(px, py);
+  if (i < 0) { flyTo(0); return; }
+  select(i, { fly: true });
+}
+const tip = document.getElementById('tip');
+function hideTip() { tip.style.display = 'none'; if (hoverDecl) { hoverDecl = null; requestDraw(); } }
+function onHover(e) {
+  const [px, py] = localXY(e);
+  const dh = hitDecl(px, py), prev = hoverDecl; hoverDecl = dh;
+  if ((prev && (!dh || prev.j !== dh.j || prev.n !== dh.n)) || (!prev && dh)) requestDraw();
+  let html = '';
+  if (dh) {
+    const d = srcCache.get(dh.n).decls[dh.j];
+    html = `<div class="t">${esc(d.name)}</div><div class="m">${d.kw} · ${d.end - d.start} lines · line ${d.start + 1}</div><pre>${esc(d.sig)}</pre>`;
+  } else {
+    const i = hit(px, py);
+    if (i <= 0) { tip.style.display = 'none'; return; }
+    if (isFile(i)) {
+      const k = KINDS[i];
+      html = `<div class="t">${esc(modOf(i))}</div><div class="m">${fmt(FLINES[i])} lines · ${k[0]} theorems · ${k[1]} defs${k[2] + k[3] ? ` · ${k[2] + k[3]} other` : ''}</div>` +
+        `<div class="m">${FDEPTH[i]} import steps from Main · imported by ${fmt(FINDEG[i])}</div>`;
+    } else {
+      html = `<div class="t">${esc(dirPath(i).join('/'))}/</div><div class="m">${fmt(DFILES[i])} files · ${fmt(DLINES[i])} lines · ${fmt(DDECLS[i])} declarations</div>` +
+        (mode === 'depth' ? `<div class="m">mean ${DDEPTH[i]} import steps from Main</div>` : '');
+    }
+  }
+  tip.innerHTML = html; tip.style.display = 'block';
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let tx = e.clientX + 14, ty = e.clientY + 14;
+  if (tx + tw > innerWidth - 8) tx = e.clientX - tw - 14;
+  if (ty + th > innerHeight - 8) ty = e.clientY - th - 14;
+  tip.style.left = tx + 'px'; tip.style.top = ty + 'px';
+}
+window.addEventListener('keydown', e => {
+  if (e.key === '/' && document.activeElement !== searchEl) { e.preventDefault(); searchEl.focus(); searchEl.select(); return; }
+  if (document.activeElement === searchEl) return;
+  if (e.key === 'Escape' || e.key === 'Backspace') {
+    const f = focusNode(); const p = selected >= 0 ? (selected === f ? PAR[selected] : f) : PAR[f];
+    if (p >= 0) select(p, { fly: true }); else flyTo(0);
+  }
+});
+function focusNode() {
+  const i = hit(W / 2, H / 2); if (i < 0) return 0;
+  let j = i; const want = Math.min(W, H) * 0.5;
+  while (j > 0 && R[j] * cam.k < want) j = PAR[j];
+  return j;
+}
+function updateCrumbs() {
+  const j = selected >= 0 ? selected : focusNode();
+  const chain = []; let i = j; while (i >= 0) { chain.push(i); i = PAR[i]; }
+  chain.reverse();
+  document.getElementById('crumbs').innerHTML = chain.map(n => `<a data-n="${n}">${esc(n === 0 ? 'src' : NAME[n])}</a>`).join(' / ');
+}
+document.getElementById('crumbs').addEventListener('click', e => { const n = e.target.dataset.n; if (n !== undefined) select(+n, { fly: true }); });
+
+// ---------- panel ----------
+const panel = document.getElementById('panel'), app = document.getElementById('app');
+let selToken = 0;
+async function select(i, opts = {}) {
+  const tok = ++selToken;
+  await ensureNode(i);
+  if (isFile(i)) await ensureEdges(i);
+  if (tok !== selToken) return;
+  selected = i; selDecl = null;
+  if (opts.fly) flyTo(i);
+  app.classList.remove('nopanel'); requestAnimationFrame(resize);
+  renderPanel(i, opts.decl, opts.declName);
+  updateCrumbs(); requestDraw();
+  try { history.replaceState(null, '', '#' + (isFile(i) ? 'm=' + modOf(i) : 'd=' + dirPath(i).join('/'))); } catch (e) {}
+  if (isFile(i)) ensureNodes([...FIMP[i].slice(0, LINE_CAP), ...FRIMP[i].slice(0, LINE_CAP)]);
+}
+function fmt(n) { return Math.round(n).toLocaleString(); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+async function chainToMain(n) {
+  const out = [n];
+  while (FDEPTH[n] > 0) { await ensureEdges(n); if (FCHAIN[n] < 0) break; n = FCHAIN[n]; await ensureNode(n); out.push(n); }
+  return out.reverse();
+}
+async function fillList(el, ns, cap) {
+  el.innerHTML = '<div class="note">Loading…</div>';
+  const show = ns.slice(0, cap); await ensureNodes(show);
+  el.innerHTML = show.map(g => `<div data-n="${g}"><span class="n">${fmt(FLINES[g])} ln</span>${esc(modOf(g))}</div>`).join('') +
+    (ns.length > cap ? `<div class="note" data-more="1" style="cursor:pointer">+ ${ns.length - cap} more — show 100 more</div>` : '');
+  el.onclick = e => {
+    const t = e.target.closest('[data-n],[data-more]'); if (!t) return;
+    if (t.dataset.more) { fillList(el, ns, cap + 100); return; }
+    select(+t.dataset.n, { fly: true });
+  };
+}
+function renderPanel(i, declIdx, declName) {
+  const P = PAL[theme];
+  const chip = i > 0 ? `<span class="chip" style="background:${P.cat[libOf(i)]}"></span>` : '';
+  let h = `<div class="sec"><span class="x" id="close" title="Close">×</span>`;
+  if (!isFile(i)) {
+    h += `<h3>Folder</h3><h2>${chip}${esc(i === 0 ? 'src' : dirPath(i).join('/'))}/</h2>
+      <div class="stats"><div class="stat"><div class="v">${fmt(DFILES[i])}</div><div class="l">files</div></div>
+      <div class="stat"><div class="v">${fmt(DLINES[i])}</div><div class="l">lines</div></div>
+      <div class="stat"><div class="v">${fmt(DDECLS[i])}</div><div class="l">declarations</div></div></div></div>
+      <div class="sec"><h3>Contents</h3><div class="list" id="kids"><div class="note">Loading…</div></div></div>`;
+    panel.innerHTML = h;
+    ensureDirFiles(i).then(() => {
+      const el = document.getElementById('kids'); if (!el || selected !== i) return;
+      const items = [...dirChildren(i).map(c => [c, DLINES[c]]), ...DIRFILES[i].map(f => [f, FLINES[f]])].sort((a, b) => b[1] - a[1]);
+      el.innerHTML = items.slice(0, 500).map(([c]) => `<div data-n="${c}"><span class="n">${isFile(c) ? fmt(FLINES[c]) + ' ln' : fmt(DFILES[c]) + ' files'}</span>${esc(NAME[c])}${isFile(c) ? '' : '/'}</div>`).join('') +
+        (items.length > 500 ? `<div class="note">+ ${items.length - 500} more (largest shown)</div>` : '');
+      el.onclick = e => { const t = e.target.closest('[data-n]'); if (t) select(+t.dataset.n, { fly: true }); };
+    });
+  } else {
+    const k = KINDS[i];
+    h += `<h3>File</h3><h2>${chip}${esc(modOf(i))}</h2>
+      <div class="stats"><div class="stat"><div class="v">${fmt(FLINES[i])}</div><div class="l">lines</div></div>
+      <div class="stat"><div class="v">${k[0]}</div><div class="l">theorems</div></div>
+      <div class="stat"><div class="v">${k[1] + k[2] + k[3] + k[4]}</div><div class="l">defs &amp; other</div></div>
+      <div class="stat"><div class="v">${FDEPTH[i]}</div><div class="l">import steps from Main</div></div>
+      <div class="stat"><div class="v">${fmt(FINDEG[i])}</div><div class="l">imported by</div></div>
+      <div class="stat"><div class="v">${FNIMP[i]}<span class="note"> +${FEXT[i]}</span></div><div class="l">imports (+ Mathlib)</div></div></div></div>
+      <div class="sec"><h3>Declarations</h3><div class="list" id="decls"><div class="note">Loading source…</div></div></div>
+      <div class="sec"><h3>Import chain from Main (${FDEPTH[i]} steps)</h3><div class="list chain" id="chain"><div class="note" id="chainbtn" style="cursor:pointer">Show the chain of imports from Main…</div></div></div>
+      <div class="sec"><h3>Imports — solid lines (${FIMP[i].length})</h3><div class="list" id="imps"></div></div>
+      <div class="sec"><h3>Imported by — dashed lines (${FRIMP[i].length})</h3><div class="list" id="rimps"></div></div>
+      <div class="sec"><h3>Source</h3><pre id="src"><span class="note">  Loading…</span></pre></div>`;
+    panel.innerHTML = h;
+    fillList(document.getElementById('imps'), FIMP[i], 25);
+    fillList(document.getElementById('rimps'), FRIMP[i], 25);
+    if (FDEPTH[i] === 0) document.getElementById('chain').innerHTML = `<div>${esc(modOf(i))}</div>`;
+    else document.getElementById('chainbtn').onclick = () => { document.getElementById('chain').innerHTML = '<div class="note">Loading…</div>'; chainToMain(i).then(ch => {
+      const el = document.getElementById('chain'); if (!el || selected !== i) return;
+      el.innerHTML = ch.map(g => `<div data-n="${g}">${esc(modOf(g))}</div>`).join('');
+      el.onclick = e => { const t = e.target.closest('[data-n]'); if (t) select(+t.dataset.n, { fly: true }); };
+    }); };
+    loadSource(i, c => { if (selected === i) { if (declName && c.decls) { const j = c.decls.findIndex(d => d.name === declName); if (j >= 0) declIdx = j; } fillSource(i, c, declIdx); } });
+  }
+  document.getElementById('close').onclick = () => { selected = -1; app.classList.add('nopanel'); requestAnimationFrame(resize); requestDraw(); };
+}
+const KW = /\b(theorem|lemma|def|abbrev|instance|structure|class|inductive|axiom|opaque|example|where|by|fun|have|show|let|calc|match|with|namespace|section|end|open|variable|import|noncomputable|private|protected|universe)\b/g;
+function hlLine(s) {
+  const ci = s.indexOf('--');
+  const code = ci >= 0 ? s.slice(0, ci) : s, cm = ci >= 0 ? s.slice(ci) : '';
+  return esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? `<span class="cm">${esc(cm)}</span>` : '');
+}
+function fillSource(n, c, declIdx) {
+  const pre = document.getElementById('src'), dl = document.getElementById('decls');
+  if (!pre) return;
+  if (c.error) {
+    const msg = location.protocol === 'file:' ? 'Open this page over http (GitHub Pages, or <code>python3 -m http.server</code> in this folder).' : `Couldn't load the source: ${esc(c.error)}`;
+    pre.innerHTML = `<span class="note" style="white-space:normal;display:block;padding:0 10px">${msg}</span>`;
+    dl.innerHTML = '<div class="note">Needs the source.</div>';
+    return;
+  }
+  const lines = c.lines.length > 20000 ? c.lines.slice(0, 20000) : c.lines;
+  pre.innerHTML = lines.map((l, k) => `<div class="row"><span class="ln">${k + 1}</span>${hlLine(l)}</div>`).join('');
+  dl.innerHTML = c.decls.length ? c.decls.map((d, j) => `<div data-j="${j}"><span class="n">${d.end - d.start} ln</span><span class="kind">${d.kind}</span>${esc(d.name)}</div>`).join('')
+    : '<div class="note">No top-level declarations found.</div>';
+  dl.onclick = e => { const t = e.target.closest('[data-j]'); if (t) showDecl(c, +t.dataset.j); };
+  if (declIdx !== undefined) showDecl(c, declIdx);
+}
+function showDecl(c, j) {
+  const d = c.decls[j], pre = document.getElementById('src'); if (!pre) return;
+  if (selected >= 0 && isFile(selected)) { selDecl = { n: selected, j }; requestDraw(); }
+  pre.querySelectorAll('.row.hl').forEach(r => r.classList.remove('hl'));
+  for (let k = d.start; k < d.end; k++) { const r = pre.children[k]; if (r) r.classList.add('hl'); }
+  const row = pre.children[d.start];
+  if (row) panel.scrollTo({ top: row.offsetTop - 80, behavior: 'smooth' });
+}
+
+// ---------- search (index fetched in shards on first use) ----------
+const searchEl = document.getElementById('search'), resEl = document.getElementById('results');
+let SIDX = [], sLoading = false, sLoaded = 0;
+function loadSearch() {
+  if (sLoading) return; sLoading = true;
+  for (let k = 0; k < S.searchShards; k++) {
+    fetch(`search/s${k}.txt`).then(r => r.text()).then(text => {
+      bytesLoaded += text.length;
+      const low = text.toLowerCase(), starts = [0];
+      for (let i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) starts.push(i + 1);
+      SIDX.push({ text, low, starts: Int32Array.from(starts) }); sLoaded++;
+      if (searchEl.value.trim().length >= 2) runSearch();
+    });
+  }
+}
+let resList = [], resOn = 0, stimer = 0;
+searchEl.addEventListener('focus', () => { loadSearch(); if (resList.length) resEl.style.display = 'block'; });
+searchEl.addEventListener('input', () => { clearTimeout(stimer); stimer = setTimeout(runSearch, 120); });
+searchEl.addEventListener('blur', () => setTimeout(() => resEl.style.display = 'none', 150));
+searchEl.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { resOn = Math.min(resList.length - 1, resOn + 1); paintRes(); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { resOn = Math.max(0, resOn - 1); paintRes(); e.preventDefault(); }
+  else if (e.key === 'Enter' && resList[resOn] !== undefined) pick(resList[resOn]);
+  else if (e.key === 'Escape') searchEl.blur();
+});
+function runSearch() {
+  loadSearch();
+  const q = searchEl.value.trim().toLowerCase();
+  if (q.length < 2) { resList = []; resEl.style.display = 'none'; return; }
+  const hits = [];
+  for (const sh of SIDX) {
+    let pos = sh.low.indexOf(q);
+    while (pos >= 0 && hits.length < 4000) {
+      let lo = 0, hi = sh.starts.length - 1;
+      while (lo < hi) { const m = (lo + hi + 1) >> 1; if (sh.starts[m] <= pos) lo = m; else hi = m - 1; }
+      const ls = sh.starts[lo], le = lo + 1 < sh.starts.length ? sh.starts[lo + 1] - 1 : sh.text.length;
+      const line = sh.text.slice(ls, le), t1 = line.indexOf('\t'), t2 = line.indexOf('\t', t1 + 1), t3 = line.indexOf('\t', t2 + 1);
+      const n = +line.slice(0, t1), did = +line.slice(t1 + 1, t2), name = line.slice(t2 + 1, t3), off = pos - ls;
+      if (off > t2 && off < t3) {               // file name
+        const l = name.toLowerCase(); hits.push({ n, did, name, s: l === q ? 0 : l.startsWith(q) ? 1 : 3 });
+        pos = sh.low.indexOf(q, ls + t3);
+      } else if (off > t3) {                    // declaration name
+        let a = pos, b = pos + q.length;
+        while (a > ls + t3 + 1 && sh.text[a - 1] !== ' ') a--;
+        while (b < le && sh.text[b] !== ' ') b++;
+        const dn = sh.text.slice(a, b), last = dn.slice(dn.lastIndexOf('.') + 1).toLowerCase();
+        hits.push({ n, did, name, d: dn, s: last === q ? 0.5 : last.startsWith(q) ? 2 : 4 });
+        pos = sh.low.indexOf(q, b);
+      } else pos = sh.low.indexOf(q, pos + 1);
+    }
+  }
+  const dirs = [];
+  if (q.length >= 3) for (let i = 1; i < D && dirs.length < 8; i++) if (NAME[i].toLowerCase().includes(q)) dirs.push({ dir: i, s: NAME[i].toLowerCase() === q ? 0.2 : 1.5 });
+  resList = [...hits, ...dirs].sort((a, b) => a.s - b.s || (a.d || a.name || '').length - (b.d || b.name || '').length).slice(0, 60);
+  resOn = 0; paintRes();
+}
+function paintRes() {
+  const hint = sLoaded < S.searchShards ? `<div class="sub">Loading search index (${sLoaded}/${S.searchShards}, ~8 MB, first search only)…</div>` : '';
+  resEl.innerHTML = hint + (resList.length ? resList.map((r, k) => {
+    const on = k === resOn ? 'on' : '';
+    if (r.dir !== undefined) return `<div data-k="${k}" class="${on}"><span class="kind">folder</span>${esc(dirPath(r.dir).join('/'))}/</div>`;
+    const mod = [...dirPath(r.did), r.name].join('.');
+    if (r.d !== undefined) return `<div data-k="${k}" class="${on}"><span class="kind">decl</span>${esc(r.d)}<div class="sub">in ${esc(mod)}</div></div>`;
+    return `<div data-k="${k}" class="${on}"><span class="kind">file</span>${esc(mod)}</div>`;
+  }).join('') : (hint ? '' : '<div class="sub">No matches</div>'));
+  resEl.style.display = 'block';
+  const on = resEl.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+}
+resEl.addEventListener('mousedown', e => { const t = e.target.closest('[data-k]'); if (t) { e.preventDefault(); pick(resList[+t.dataset.k]); } });
+function pick(r) { resEl.style.display = 'none'; searchEl.blur(); select(r.dir !== undefined ? r.dir : r.n, { fly: true, declName: r.d }); }
+
+// ---------- controls + boot ----------
+document.getElementById('mode').addEventListener('change', e => { mode = e.target.value; recolor(); });
+document.getElementById('home').onclick = () => flyTo(0);
+document.getElementById('gomain').onclick = () => select(S.mainNode, { fly: true });
+document.getElementById('theme').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('riemann-world-theme', theme); } catch (e) {} recolor(); if (selected >= 0) renderPanel(selected); };
+window.addEventListener('resize', resize);
+async function fromHash() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (!h.startsWith('m=') && !h.startsWith('d=')) return;
+  const parts = h.startsWith('m=') ? h.slice(2).split('.') : h.slice(2).split('/');
+  let i = 0, k = 0;
+  for (; k < parts.length; k++) { const c = dirChildren(i).find(c => NAME[c] === parts[k]); if (c === undefined) break; i = c; }
+  // the rest of a module name is a file inside folder i (file names never contain dots)
+  if (k < parts.length && h.startsWith('m=')) { await ensureDirFiles(i); const f = DIRFILES[i].find(f => NAME[f] === parts.slice(k).join('.')); if (f !== undefined) i = f; }
+  cam = { x: X[i], y: Y[i], k: fitK(i, isFile(i) ? 0.62 : 0.92) };
+  select(i);
+}
+function start() {
+  recolor(); resize();
+  document.getElementById('loading').remove();
+  updateCrumbs(); fromHash();
+}
+boot().catch(e => { document.getElementById('loading').textContent = location.protocol === 'file:' ? 'Open this page over http — GitHub Pages, or run “python3 -m http.server” in this folder.' : 'Failed to load: ' + e; });
+</script>
+</body>
+</html>
