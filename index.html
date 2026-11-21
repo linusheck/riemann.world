@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>riemann.world</title>
 <style>
 :root {
@@ -22,10 +22,19 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--page); color: var(--ink); overflow: hidden; }
-#app { display: grid; grid-template-columns: 1fr 440px; grid-template-rows: auto 1fr; height: 100vh; }
-#app.nopanel { grid-template-columns: 1fr 0; }
+#app { display: grid; grid-template-columns: minmax(0, 1fr) 440px; grid-template-rows: auto 1fr; height: 100vh; height: 100dvh; }
+#app.nopanel { grid-template-columns: minmax(0, 1fr) 0; }
+header { min-width: 0; }
 header { grid-column: 1 / 3; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--hair); background: var(--surface); min-height: 48px; flex-wrap: wrap; }
 header h1 { font-size: 14px; font-weight: 600; margin: 0 6px 0 0; white-space: nowrap; }
+header h1 a { color: inherit; text-decoration: none; }
+@media (hover: hover) { header h1 a:hover { text-decoration: underline; } }
+#btns { display: flex; gap: 8px; }
+#colourwrap { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.short { display: none; }
+#grab { display: none; }
+#paper { font-size: 12px; color: var(--ink-2); text-decoration: none; white-space: nowrap; margin-right: 6px; }
+#paper:hover { color: var(--ink); text-decoration: underline; }
 .ctl { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
 button.ctl { cursor: pointer; }
 button.ctl:hover { border-color: var(--muted); }
@@ -40,7 +49,7 @@ button.ctl:hover { border-color: var(--muted); }
 #legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
 #legend .bar { width: 160px; height: 10px; border-radius: 5px; display: inline-block; vertical-align: -1px; margin: 0 4px; }
 #stage { position: relative; overflow: hidden; }
-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 canvas.drag { cursor: grabbing; }
 .pill { background: color-mix(in srgb, var(--surface) 85%, transparent); border: 1px solid var(--border); border-radius: 6px; }
 #crumbs { position: absolute; left: 12px; top: 10px; font-size: 12px; color: var(--ink-2); padding: 4px 8px; max-width: calc(100% - 24px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -52,7 +61,7 @@ canvas.drag { cursor: grabbing; }
 #tip .t { font-weight: 600; word-break: break-all; }
 #tip .m { color: var(--ink-2); margin-top: 2px; }
 #tip pre { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; font-size: 11px; color: var(--ink-2); max-height: 160px; overflow: hidden; }
-aside { border-left: 1px solid var(--hair); background: var(--surface); overflow: auto; font-size: 13px; }
+aside { position: relative; border-left: 1px solid var(--hair); background: var(--surface); overflow: auto; font-size: 13px; }
 #app.nopanel aside { display: none; }
 aside .sec { padding: 12px 14px; border-bottom: 1px solid var(--hair); }
 aside h2 { font-size: 14px; margin: 0 0 4px; word-break: break-all; font-weight: 600; }
@@ -74,28 +83,68 @@ aside h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; co
 .chip { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
 #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--page); font-size: 14px; color: var(--ink-2); z-index: 50; }
 .x { float: right; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
+@media (hover: none) { #help { display: none; } }
+/* ---------- phones & small tablets: full-screen map, compact header, bottom sheet ---------- */
+@media (max-width: 900px) {
+  #app, #app.nopanel { grid-template-columns: minmax(0, 1fr); }
+  header { grid-column: 1; position: relative; gap: 6px 8px; padding: calc(6px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) 6px calc(8px + env(safe-area-inset-left)); min-height: 0; }
+  header h1 { font-size: 16px; margin: 0; }
+  .long { display: none; } .short { display: inline; }
+  #paper { margin: 0; }
+  #btns { margin-left: auto; gap: 6px; }
+  #home { display: none; }          /* tapping the title does the same */
+  #theme { min-width: 38px; font-size: 16px; padding: 4px 8px; }
+  .ctl { font-size: 14px; padding: 6px 10px; }
+  #searchwrap { position: static; order: 5; flex: 1 1 180px; min-width: 0; }
+  #search { width: 100%; font-size: 16px; padding: 7px 10px; }   /* 16px stops iOS zooming on focus */
+  #colourwrap { order: 6; }
+  #mode { max-width: 40vw; font-size: 14px; padding: 7px 6px; }
+  #legend { order: 7; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: none; font-size: 11px; gap: 10px; }
+  #legend::-webkit-scrollbar { display: none; }
+  #legend > span { flex: none; }
+  #results { left: 8px; right: 8px; width: auto; top: 100%; max-height: 55vh; max-height: 55dvh; }
+  #results div { padding: 10px 12px; font-size: 13px; }
+  #crumbs { left: 8px; top: 8px; font-size: 11px; max-width: calc(100% - 16px); }
+  #status { left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 10px; }
+  #help { display: none; }
+  aside#sheet { position: fixed; left: 0; right: 0; bottom: 0; height: 42vh; height: 42dvh; border-left: 0; border-top: 1px solid var(--hair);
+    border-radius: 14px 14px 0 0; box-shadow: 0 -8px 28px rgba(0,0,0,.28); z-index: 25; transition: height .22s ease;
+    padding-bottom: env(safe-area-inset-bottom); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  aside#sheet.full { height: 88vh; height: 88dvh; }
+  #grab { display: flex; justify-content: center; position: sticky; top: 0; background: var(--surface); padding: 8px 0 6px; z-index: 2; cursor: pointer; }
+  #grab span { width: 40px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .55; }
+  aside .sec { padding: 10px 14px; }
+  aside .sec:first-child { padding-top: 2px; }
+  .list div { padding: 7px 0; font-size: 13px; }
+  .x { font-size: 24px; padding: 0 2px 0 10px; }
+  #src { font-size: 11px; }
+  #tip { display: none !important; }
+}
 </style>
 </head>
 <body>
 <div id="loading">Loading…</div>
 <div id="app" class="nopanel">
   <header>
-    <h1>riemann.world</h1>
+    <h1><a id="home-title" href="./" title="Back to the start">riemann.world</a></h1>
+    <a id="paper" href="https://alpo.ge/remark.pdf" target="_blank" rel="noopener"><span class="long">Alpöge's Riemann proof</span><span class="short">the proof</span> ↗</a>
     <div id="searchwrap">
       <input id="search" class="ctl" placeholder="Search files, folders, declarations…  ( / )" autocomplete="off" spellcheck="false">
       <div id="results"></div>
     </div>
-    <label style="font-size:12px;color:var(--ink-2)">Colour
-      <select id="mode" class="ctl">
+    <label id="colourwrap"><span class="long">Colour</span>
+      <select id="mode" class="ctl" aria-label="Colour by">
         <option value="lib">Library</option>
         <option value="depth">Import distance from Main</option>
         <option value="indeg">Imported by (count)</option>
         <option value="thm">Share of theorems</option>
       </select>
     </label>
-    <button id="gomain" class="ctl" title="Jump to Main.lean">Main</button>
-    <button id="home" class="ctl" title="Zoom out to everything (Esc)">Overview</button>
-    <button id="theme" class="ctl" title="Toggle light/dark">Light / dark</button>
+    <div id="btns">
+      <button id="gomain" class="ctl" title="Jump to Main.lean">Main</button>
+      <button id="home" class="ctl" title="Zoom out to everything (Esc)"><span class="long">Overview</span><span class="short">Zoom out</span></button>
+      <button id="theme" class="ctl" title="Toggle light/dark" aria-label="Toggle light/dark"><span class="long">Light / dark</span><span class="short">◐</span></button>
+    </div>
     <div id="legend"></div>
   </header>
   <div id="stage">
@@ -104,7 +153,7 @@ aside h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; co
     <div id="status" class="pill"></div>
     <div id="help" class="pill">scroll to zoom · drag to pan · click to focus · Esc to go up<br>zoom into a file to see its declarations</div>
   </div>
-  <aside id="panel"></aside>
+  <aside id="sheet"><div id="grab" title="Expand / collapse"><span></span></div><div id="panel"></div></aside>
 </div>
 <div id="tip"></div>
 <script src="d3-hierarchy.min.js"></script>
@@ -263,9 +312,9 @@ function drawLegend() {
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1;
 let cam = { x: 0, y: 0, k: 1 };
-function fitK(i, frac = 0.92) { return Math.min(W, H) * frac / (2 * R[i]); }
+function fitK(i, frac = 0.92) { return Math.min(W, H - (typeof insetB === 'function' ? insetB() : 0)) * frac / (2 * R[i]); }
 function resize() {
-  const r = cv.getBoundingClientRect(); DPR = window.devicePixelRatio || 1;
+  const r = cv.getBoundingClientRect(); DPR = Math.min(window.devicePixelRatio || 1, 2);
   const first = W === 0;
   W = r.width; H = r.height; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   if (first) cam = { x: X[0], y: Y[0], k: fitK(0) };
@@ -550,7 +599,8 @@ function interpolateZoom(p0, p1) {
 let anim = null;
 function flyTo(i, frac) {
   const v = Math.min(W, H);
-  const z = interpolateZoom([cam.x, cam.y, v / cam.k], [X[i], Y[i], v / fitK(i, frac || (isFile(i) ? 0.62 : 0.92))]);
+  const kT = fitK(i, frac || (isFile(i) ? 0.62 : 0.92));
+  const z = interpolateZoom([cam.x, cam.y, v / cam.k], [X[i], Y[i] + insetB() / 2 / kT, v / kT]);
   const dur = Math.max(350, Math.min(1800, z.duration * 0.9)), t0 = performance.now();
   if (anim) cancelAnimationFrame(anim);
   const step = now => {
@@ -562,9 +612,10 @@ function flyTo(i, frac) {
 }
 
 // ---------- interaction ----------
-let drag = null, moved = false;
-cv.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y }; moved = false; cv.classList.add('drag'); if (anim) { cancelAnimationFrame(anim); anim = null; } });
-window.addEventListener('mouseup', e => { cv.classList.remove('drag'); if (drag && !moved && e.target === cv) onClick(e); drag = null; });
+let drag = null, moved = false, lastTouch = 0;
+const recentTouch = () => Date.now() - lastTouch < 800;
+cv.addEventListener('mousedown', e => { if (recentTouch()) return; drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y }; moved = false; cv.classList.add('drag'); if (anim) { cancelAnimationFrame(anim); anim = null; } });
+window.addEventListener('mouseup', e => { if (recentTouch()) { drag = null; return; } cv.classList.remove('drag'); if (drag && !moved && e.target === cv) onClick(e); drag = null; });
 window.addEventListener('mousemove', e => {
   if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
@@ -572,6 +623,7 @@ window.addEventListener('mousemove', e => {
     if (moved) { cam.x = drag.cx - dx / cam.k; cam.y = drag.cy - dy / cam.k; requestDraw(); updateCrumbs(); hideTip(); }
     return;
   }
+  if (recentTouch()) return;
   if (e.target === cv) onHover(e); else hideTip();
 });
 cv.addEventListener('wheel', e => {
@@ -585,9 +637,14 @@ cv.addEventListener('wheel', e => {
 }, { passive: false });
 // touch: one finger pans, two fingers pinch-zoom
 let touches = null;
-cv.addEventListener('touchstart', e => { touches = [...e.touches].map(t => ({ x: t.clientX, y: t.clientY })); touches.cam = { ...cam }; moved = false; }, { passive: true });
+function baseline(e) { touches = [...e.touches].map(t => ({ x: t.clientX, y: t.clientY })); touches.cam = { ...cam }; }
+cv.addEventListener('touchstart', e => {
+  lastTouch = Date.now(); if (e.touches.length === 1) moved = false; else moved = true;
+  if (anim) { cancelAnimationFrame(anim); anim = null; }
+  baseline(e);
+}, { passive: true });
 cv.addEventListener('touchmove', e => {
-  e.preventDefault(); if (!touches) return;
+  e.preventDefault(); lastTouch = Date.now(); if (!touches) return;
   const t = [...e.touches].map(t => ({ x: t.clientX, y: t.clientY })), c0 = touches.cam, r = cv.getBoundingClientRect();
   if (t.length === 1 && touches.length === 1) { const dx = t[0].x - touches[0].x, dy = t[0].y - touches[0].y; if (Math.abs(dx) + Math.abs(dy) > 4) moved = true; cam.x = c0.x - dx / c0.k; cam.y = c0.y - dy / c0.k; }
   else if (t.length === 2 && touches.length === 2) {
@@ -599,7 +656,13 @@ cv.addEventListener('touchmove', e => {
   }
   requestDraw(); updateCrumbs();
 }, { passive: false });
-cv.addEventListener('touchend', e => { if (touches && !moved && e.changedTouches.length === 1) onClick(e.changedTouches[0]); touches = null; });
+cv.addEventListener('touchend', e => {
+  lastTouch = Date.now();
+  if (e.touches.length) { baseline(e); return; }          // a finger lifted mid-pinch: keep going from here
+  if (touches && !moved && e.changedTouches.length === 1) onClick(e.changedTouches[0]);
+  touches = null;
+});
+cv.addEventListener('touchcancel', () => { touches = null; });
 function localXY(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 function onClick(e) {
   const [px, py] = localXY(e);
@@ -661,7 +724,12 @@ function updateCrumbs() {
 document.getElementById('crumbs').addEventListener('click', e => { const n = e.target.dataset.n; if (n !== undefined) select(+n, { fly: true }); });
 
 // ---------- panel ----------
-const panel = document.getElementById('panel'), app = document.getElementById('app');
+const panel = document.getElementById('panel'), sheet = document.getElementById('sheet'), app = document.getElementById('app');
+const mobileMQ = matchMedia('(max-width: 900px)');
+// on phones the panel is a bottom sheet over the map: leave room for it when framing things
+const insetB = () => (mobileMQ.matches && !app.classList.contains('nopanel')) ? sheet.offsetHeight : 0;
+document.getElementById('grab').onclick = () => sheet.classList.toggle('full');
+if (mobileMQ.matches) document.getElementById('search').placeholder = 'Search files, declarations…';
 let selToken = 0;
 async function select(i, opts = {}) {
   const tok = ++selToken;
@@ -669,12 +737,17 @@ async function select(i, opts = {}) {
   if (isFile(i)) await ensureEdges(i);
   if (tok !== selToken) return;
   selected = i; selDecl = null;
+  app.classList.remove('nopanel'); if (!mobileMQ.matches) resize();
   if (opts.fly) flyTo(i);
-  app.classList.remove('nopanel'); requestAnimationFrame(resize);
   renderPanel(i, opts.decl, opts.declName);
   updateCrumbs(); requestDraw();
   try { history.replaceState(null, '', '#' + (isFile(i) ? 'm=' + modOf(i) : 'd=' + dirPath(i).join('/'))); } catch (e) {}
   if (isFile(i)) ensureNodes([...FIMP[i].slice(0, LINE_CAP), ...FRIMP[i].slice(0, LINE_CAP)]);
+}
+function closePanel() {
+  selected = -1; selDecl = null; app.classList.add('nopanel'); sheet.classList.remove('full');
+  if (!mobileMQ.matches) resize(); requestDraw();
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
 }
 function fmt(n) { return Math.round(n).toLocaleString(); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -737,7 +810,7 @@ function renderPanel(i, declIdx, declName) {
     }); };
     loadSource(i, c => { if (selected === i) { if (declName && c.decls) { const j = c.decls.findIndex(d => d.name === declName); if (j >= 0) declIdx = j; } fillSource(i, c, declIdx); } });
   }
-  document.getElementById('close').onclick = () => { selected = -1; app.classList.add('nopanel'); requestAnimationFrame(resize); requestDraw(); };
+  document.getElementById('close').onclick = closePanel;
 }
 const KW = /\b(theorem|lemma|def|abbrev|instance|structure|class|inductive|axiom|opaque|example|where|by|fun|have|show|let|calc|match|with|namespace|section|end|open|variable|import|noncomputable|private|protected|universe)\b/g;
 function hlLine(s) {
@@ -767,7 +840,7 @@ function showDecl(c, j) {
   pre.querySelectorAll('.row.hl').forEach(r => r.classList.remove('hl'));
   for (let k = d.start; k < d.end; k++) { const r = pre.children[k]; if (r) r.classList.add('hl'); }
   const row = pre.children[d.start];
-  if (row) panel.scrollTo({ top: row.offsetTop - 80, behavior: 'smooth' });
+  if (row) { if (mobileMQ.matches) sheet.classList.add('full'); sheet.scrollTo({ top: row.offsetTop - 80, behavior: 'smooth' }); }
 }
 
 // ---------- search (index fetched in shards on first use) ----------
@@ -788,7 +861,7 @@ function loadSearch() {
 let resList = [], resOn = 0, stimer = 0;
 searchEl.addEventListener('focus', () => { loadSearch(); if (resList.length) resEl.style.display = 'block'; });
 searchEl.addEventListener('input', () => { clearTimeout(stimer); stimer = setTimeout(runSearch, 120); });
-searchEl.addEventListener('blur', () => setTimeout(() => resEl.style.display = 'none', 150));
+searchEl.addEventListener('blur', () => setTimeout(() => resEl.style.display = 'none', 250));
 searchEl.addEventListener('keydown', e => {
   if (e.key === 'ArrowDown') { resOn = Math.min(resList.length - 1, resOn + 1); paintRes(); e.preventDefault(); }
   else if (e.key === 'ArrowUp') { resOn = Math.max(0, resOn - 1); paintRes(); e.preventDefault(); }
@@ -838,12 +911,14 @@ function paintRes() {
   resEl.style.display = 'block';
   const on = resEl.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest' });
 }
-resEl.addEventListener('mousedown', e => { const t = e.target.closest('[data-k]'); if (t) { e.preventDefault(); pick(resList[+t.dataset.k]); } });
+resEl.addEventListener('mousedown', e => e.preventDefault());
+resEl.addEventListener('click', e => { const t = e.target.closest('[data-k]'); if (t) pick(resList[+t.dataset.k]); });
 function pick(r) { resEl.style.display = 'none'; searchEl.blur(); select(r.dir !== undefined ? r.dir : r.n, { fly: true, declName: r.d }); }
 
 // ---------- controls + boot ----------
 document.getElementById('mode').addEventListener('change', e => { mode = e.target.value; recolor(); });
 document.getElementById('home').onclick = () => flyTo(0);
+document.getElementById('home-title').onclick = e => { e.preventDefault(); closePanel(); searchEl.value = ''; resList = []; flyTo(0); updateCrumbs(); };
 document.getElementById('gomain').onclick = () => select(S.mainNode, { fly: true });
 document.getElementById('theme').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('riemann-world-theme', theme); } catch (e) {} recolor(); if (selected >= 0) renderPanel(selected); };
 window.addEventListener('resize', resize);
@@ -856,7 +931,7 @@ async function fromHash() {
   // the rest of a module name is a file inside folder i (file names never contain dots)
   if (k < parts.length && h.startsWith('m=')) { await ensureDirFiles(i); const f = DIRFILES[i].find(f => NAME[f] === parts.slice(k).join('.')); if (f !== undefined) i = f; }
   cam = { x: X[i], y: Y[i], k: fitK(i, isFile(i) ? 0.62 : 0.92) };
-  select(i);
+  select(i, { fly: true });
 }
 function start() {
   recolor(); resize();

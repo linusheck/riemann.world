@@ -1,6 +1,6 @@
 # riemann.world
 
-A zoomable nested-circle map of a 175,187-file Lean 4 project (≈17M lines, ≈1.06M declarations). It is a plain static site with no build step, so it works on GitHub Pages or any static file server.
+A zoomable nested-circle map of the Lean formalisation behind [Alpöge's Riemann proof](https://alpo.ge/remark.pdf): 175,187 Lean 4 files, ≈17M lines, ≈1.06M declarations. It is a plain static site with no build step, so it works on GitHub Pages or any static file server.
 
 ## What's in here
 
